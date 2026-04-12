@@ -28,7 +28,7 @@ fun TuiPlayerScreen(
     onNext: () -> Unit = {},
     onToggleLike: () -> Unit = {},
     onSetScheme: (String) -> Unit = {},
-    onToggleTui: () -> Unit = {}
+    onBack: () -> Unit = {}
 ) {
     Box(modifier = Modifier.fillMaxSize().background(TuiTheme.colors.background)) {
         ScanlineOverlay()
@@ -50,7 +50,7 @@ fun TuiPlayerScreen(
                         text = "DERG PLAYER V1.1.0-TUI",
                         fontWeight = FontWeight.Bold
                     )
-                    TuiButton(text = "EXIT TUI", onClick = onToggleTui)
+                    TuiButton(text = "LIBRARY", onClick = onBack)
                 }
             }
             

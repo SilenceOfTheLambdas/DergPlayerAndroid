@@ -17,7 +17,6 @@ import com.silenceofthelambda.dergplayer.api.AuthManager
 import com.silenceofthelambda.dergplayer.api.YouTubeClient
 import com.silenceofthelambda.dergplayer.ui.DergPlayerApp
 import com.silenceofthelambda.dergplayer.ui.PlayerViewModel
-import com.silenceofthelambda.dergplayer.ui.theme.DergPlayerTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -26,56 +25,49 @@ class MainActivity : ComponentActivity() {
         val authManager = AuthManager(this)
         
         setContent {
-            DergPlayerTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    var isAuthorized by remember { mutableStateOf(authManager.isAuthorized()) }
-                    var refreshTrigger by remember { mutableIntStateOf(0) }
-                    
-                    val launcher = rememberLauncherForActivityResult(
-                        contract = ActivityResultContracts.StartActivityForResult()
-                    ) { result ->
-                        if (result.resultCode == RESULT_OK) {
-                            val accountName = result.data?.getStringExtra(android.accounts.AccountManager.KEY_ACCOUNT_NAME)
-                            if (accountName != null) {
-                                authManager.setAccountName(accountName)
-                                isAuthorized = true
-                            } else {
-                                // This could be the result of a recovery intent
-                                refreshTrigger++
-                            }
-                        }
-                    }
-
-                    if (isAuthorized) {
-                        val youtubeClient = remember { YouTubeClient(this, authManager.credential) }
-                        
-                        LaunchedEffect(youtubeClient) {
-                            youtubeClient.authRecoveryIntents.collect { intent ->
-                                launcher.launch(intent)
-                            }
-                        }
-
-                        val playerViewModel: PlayerViewModel = viewModel(
-                            factory = object : ViewModelProvider.Factory {
-                                override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                                    return PlayerViewModel(application, youtubeClient) as T
-                                }
-                            }
-                        )
-                        DergPlayerApp(
-                            viewModel = playerViewModel, 
-                            youtubeClient = youtubeClient,
-                            refreshTrigger = refreshTrigger
-                        )
+            var isAuthorized by remember { mutableStateOf(authManager.isAuthorized()) }
+            var refreshTrigger by remember { mutableIntStateOf(0) }
+            
+            val launcher = rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.StartActivityForResult()
+            ) { result ->
+                if (result.resultCode == RESULT_OK) {
+                    val accountName = result.data?.getStringExtra(android.accounts.AccountManager.KEY_ACCOUNT_NAME)
+                    if (accountName != null) {
+                        authManager.setAccountName(accountName)
+                        isAuthorized = true
                     } else {
-                        // Show login screen or trigger account picker
-                        LaunchedEffect(Unit) {
-                            launcher.launch(authManager.getPickAccountIntent())
+                        // This could be the result of a recovery intent
+                        refreshTrigger++
+                    }
+                }
+            }
+
+            if (isAuthorized) {
+                val youtubeClient = remember { YouTubeClient(this, authManager.credential) }
+                
+                LaunchedEffect(youtubeClient) {
+                    youtubeClient.authRecoveryIntents.collect { intent ->
+                        launcher.launch(intent)
+                    }
+                }
+
+                val playerViewModel: PlayerViewModel = viewModel(
+                    factory = object : ViewModelProvider.Factory {
+                        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                            return PlayerViewModel(application, youtubeClient) as T
                         }
                     }
+                )
+                DergPlayerApp(
+                    viewModel = playerViewModel, 
+                    youtubeClient = youtubeClient,
+                    refreshTrigger = refreshTrigger
+                )
+            } else {
+                // Show login screen or trigger account picker
+                LaunchedEffect(Unit) {
+                    launcher.launch(authManager.getPickAccountIntent())
                 }
             }
         }

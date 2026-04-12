@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
@@ -19,6 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -28,13 +30,17 @@ fun TuiText(
     modifier: Modifier = Modifier,
     color: Color = TuiTheme.colors.primary,
     fontWeight: FontWeight = FontWeight.Normal,
-    style: TextStyle = TuiTheme.typography
+    style: TextStyle = TuiTheme.typography,
+    maxLines: Int = Int.MAX_VALUE,
+    overflow: TextOverflow = TextOverflow.Clip
 ) {
     Text(
         text = text,
         modifier = modifier,
         color = color,
-        style = style.copy(fontWeight = fontWeight)
+        style = style.copy(fontWeight = fontWeight),
+        maxLines = maxLines,
+        overflow = overflow
     )
 }
 
@@ -127,4 +133,41 @@ fun TuiProgressBar(
     }
     
     TuiText(text = barText, modifier = modifier)
+}
+
+@Composable
+fun TuiTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    placeholder: String = ""
+) {
+    Box(
+        modifier = modifier
+            .border(1.dp, TuiTheme.colors.primary.copy(alpha = 0.5f))
+            .background(TuiTheme.colors.background)
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+    ) {
+        if (value.isEmpty()) {
+            TuiText(text = "> $placeholder", color = TuiTheme.colors.primary.copy(alpha = 0.3f))
+        }
+        androidx.compose.foundation.text.BasicTextField(
+            value = value,
+            onValueChange = onValueChange,
+            textStyle = TuiTheme.typography.copy(color = TuiTheme.colors.primary),
+            cursorBrush = androidx.compose.ui.graphics.SolidColor(TuiTheme.colors.primary),
+            modifier = Modifier.fillMaxWidth(),
+            decorationBox = { innerTextField ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TuiText(text = "> ")
+                    innerTextField()
+                }
+            }
+        )
+    }
+}
+
+@Composable
+fun TuiLoadingIndicator(modifier: Modifier = Modifier) {
+    TuiText(text = " LOADING... ", modifier = modifier.padding(16.dp))
 }

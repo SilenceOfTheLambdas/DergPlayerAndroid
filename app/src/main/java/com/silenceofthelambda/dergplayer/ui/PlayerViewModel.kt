@@ -73,9 +73,6 @@ class PlayerViewModel(
     private val _dominantColor = MutableStateFlow<Color>(Color.Black)
     val dominantColor: StateFlow<Color> = _dominantColor
 
-    private val _isTuiMode = MutableStateFlow(false)
-    val isTuiMode: StateFlow<Boolean> = _isTuiMode
-
     private val _tuiSchemeName = MutableStateFlow("Matrix")
     val tuiSchemeName: StateFlow<String> = _tuiSchemeName
 
@@ -325,10 +322,6 @@ class PlayerViewModel(
                 }
             }
         }
-    }
-
-    fun toggleTuiMode() {
-        _isTuiMode.value = !_isTuiMode.value
     }
 
     fun setTuiScheme(name: String) {
