@@ -4,7 +4,6 @@ import android.app.Application
 import android.Manifest
 import android.content.ComponentName
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import android.media.audiofx.Visualizer
 import android.net.Uri
@@ -168,16 +167,11 @@ class PlayerViewModel(
                 if (song != null) {
                     if (_currentSong.value?.id != songId) {
                         android.util.Log.d("PlayerViewModel", "Transitioning to song: ${song.title}")
-                        _currentSong.value = song
-                        updateRemainingQueue()
-                        
-                        // Trigger UI metadata update (from cache if ready)
-                        viewModelScope.launch {
-                            fetchSongMetadataUI(song)
-                        }
+                        handleSongStarted(song)
+                    } else {
+                        // Even if it's the same song (e.g. repeat mode), ensure next is prefetched
+                        prefetchNextSong()
                     }
-                    // Always try to prefetch the next one
-                    prefetchNextSong()
                 }
             }
         }
@@ -255,6 +249,36 @@ class PlayerViewModel(
     private fun stopPositionUpdates() {
         positionUpdateJob?.cancel()
         positionUpdateJob = null
+    }
+
+    private fun handleSongStarted(song: Song, info: StreamExtractor.FullStreamInfo? = null, skipEarlyTasks: Boolean = false) {
+        if (!skipEarlyTasks) {
+            _currentSong.value = song
+            _relatedSongs.value = emptyList()
+            _isLiked.value = false
+            updateRemainingQueue()
+        }
+
+        // Background tasks
+        viewModelScope.launch {
+            // UI Metadata update (from cache if ready)
+            launch { fetchSongMetadataUI(song) }
+
+            // Get rating
+            launch {
+                val rating = youtubeClient.getVideoRating(song.id)
+                _isLiked.value = rating == "like"
+            }
+
+            // Recommendations
+            launch {
+                val currentInfo = info ?: extractor.getFullStreamInfo(song.id)
+                processRecommendations(song, currentInfo)
+            }
+            
+            // Prefetch next song and update player playlist
+            prefetchNextSong()
+        }
     }
 
     private fun updateRemainingQueue() {
@@ -426,32 +450,21 @@ class PlayerViewModel(
             _relatedSongs.value = emptyList()
             _isLiked.value = false
 
-            // Parallelize non-essential tasks
-            launch {
-                val rating = youtubeClient.getVideoRating(song.id)
-                _isLiked.value = rating == "like"
-            }
-
-            launch {
-                fetchSongMetadataUI(song)
-            }
-
             // Set queue if provided, otherwise maintain current or add song
             if (contextQueue.isNotEmpty()) {
                 _originalQueue.value = contextQueue
                 if (_shuffleMode.value != ShuffleMode.OFF) {
-                    val firstSong = song
-                    val others = contextQueue.filter { it.id != firstSong.id }.shuffled()
-                    _queue.value = listOf(firstSong) + others
+                    val others = contextQueue.filter { it.id != song.id }.shuffled()
+                    _queue.value = listOf(song) + others
                 } else {
                     _queue.value = contextQueue
                 }
             } else {
                 if (!_queue.value.any { it.id == song.id }) {
-                    _queue.value = _queue.value + song
+                    _queue.value += song
                 }
                 if (!_originalQueue.value.any { it.id == song.id }) {
-                    _originalQueue.value = _originalQueue.value + song
+                    _originalQueue.value += song
                 }
             }
             updateRemainingQueue()
@@ -477,9 +490,8 @@ class PlayerViewModel(
                     it.play()
                 }
 
-                // Start background tasks after playback has started
-                launch { processRecommendations(song, info) }
-                prefetchNextSong()
+                // Start background tasks (recommendations, prefetching, etc.)
+                handleSongStarted(song, info, skipEarlyTasks = true)
             } else {
                 android.util.Log.e("PlayerViewModel", "Could not get stream URL for song ${song.id}")
             }
