@@ -54,6 +54,9 @@ class PlayerViewModel(
     private val _isPlaying = MutableStateFlow(false)
     val isPlaying: StateFlow<Boolean> = _isPlaying
 
+    private val _isLiked = MutableStateFlow(false)
+    val isLiked: StateFlow<Boolean> = _isLiked
+
     private val _relatedSongs = MutableStateFlow<List<Song>>(emptyList())
     // Note: Public StateFlow removed as it is no longer used in UI, only internally for Smart Shuffle.
 
@@ -141,7 +144,13 @@ class PlayerViewModel(
         viewModelScope.launch {
             _currentSong.value = song
             _relatedSongs.value = emptyList()
-            
+            _isLiked.value = false
+
+            launch {
+                val rating = youtubeClient.getVideoRating(song.id)
+                _isLiked.value = rating == "like"
+            }
+
             // Set queue if provided, otherwise maintain current or add song
             if (contextQueue.isNotEmpty()) {
                 _originalQueue.value = contextQueue
@@ -259,6 +268,16 @@ class PlayerViewModel(
             Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ONE
             Player.REPEAT_MODE_ONE -> Player.REPEAT_MODE_ALL
             else -> Player.REPEAT_MODE_OFF
+        }
+    }
+
+    fun toggleLike() {
+        val song = _currentSong.value ?: return
+        val newLiked = !_isLiked.value
+        _isLiked.value = newLiked
+        
+        viewModelScope.launch {
+            youtubeClient.rateVideo(song.id, if (newLiked) "like" else "none")
         }
     }
 

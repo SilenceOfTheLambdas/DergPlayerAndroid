@@ -9,7 +9,7 @@ import com.google.api.services.youtube.YouTubeScopes
 import androidx.core.content.edit
 
 class AuthManager(private val context: Context) {
-    private val SCOPES = listOf(YouTubeScopes.YOUTUBE_READONLY)
+    private val SCOPES = listOf(YouTubeScopes.YOUTUBE)
     private val PREFS_NAME = "DergPlayerPrefs"
     private val KEY_ACCOUNT_NAME = "accountName"
     

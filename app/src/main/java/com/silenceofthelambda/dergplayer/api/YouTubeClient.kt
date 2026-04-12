@@ -34,14 +34,24 @@ class YouTubeClient(private val context: Context, private val credential: Google
                 .setMaxResults(50L)
                 .execute()
 
-            response.items.map { item ->
+            val playlists = response.items.map { item ->
                 Playlist(
                     id = item.id,
                     title = item.snippet.title,
                     count = item.contentDetails.itemCount,
                     thumbnail = item.snippet.thumbnails.default.url
                 )
-            }
+            }.toMutableList()
+
+            // Add Liked Music system playlist
+            playlists.add(0, Playlist(
+                id = "LM",
+                title = "Liked Music",
+                count = 0,
+                thumbnail = "https://www.gstatic.com/youtube/media/ytm/images/p_liked_songs.png"
+            ))
+
+            playlists
         } catch (e: UserRecoverableAuthIOException) {
             _authRecoveryIntents.tryEmit(e.intent)
             emptyList()
@@ -123,6 +133,29 @@ class YouTubeClient(private val context: Context, private val credential: Google
         } catch (e: Exception) {
             e.printStackTrace()
             emptyList()
+        }
+    }
+
+    suspend fun rateVideo(videoId: String, rating: String) = withContext(Dispatchers.IO) {
+        try {
+            youtube.videos().rate(videoId, rating).execute()
+        } catch (e: UserRecoverableAuthIOException) {
+            _authRecoveryIntents.tryEmit(e.intent)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    suspend fun getVideoRating(videoId: String): String = withContext(Dispatchers.IO) {
+        try {
+            val response = youtube.videos().getRating(listOf(videoId)).execute()
+            response.items.firstOrNull()?.rating ?: "none"
+        } catch (e: UserRecoverableAuthIOException) {
+            _authRecoveryIntents.tryEmit(e.intent)
+            "none"
+        } catch (e: Exception) {
+            e.printStackTrace()
+            "none"
         }
     }
 

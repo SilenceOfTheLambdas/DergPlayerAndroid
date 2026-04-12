@@ -460,6 +460,7 @@ fun PlayerScreen(viewModel: PlayerViewModel, onBack: () -> Unit) {
     val dominantColor by viewModel.dominantColor.collectAsState()
     val shuffleMode by viewModel.shuffleMode.collectAsState()
     val repeatMode by viewModel.repeatMode.collectAsState()
+    val isLiked by viewModel.isLiked.collectAsState()
 
     var showQueue by remember { mutableStateOf(false) }
     val scaffoldState = rememberBottomSheetScaffoldState()
@@ -550,7 +551,7 @@ fun PlayerScreen(viewModel: PlayerViewModel, onBack: () -> Unit) {
                     Spacer(modifier = Modifier.weight(1f))
                     
                     currentSong?.let { song ->
-                        SongInfo(song = song)
+                        SongInfo(song = song, isLiked = isLiked, onToggleLike = { viewModel.toggleLike() })
                     }
                     
                     Spacer(modifier = Modifier.height(24.dp))
@@ -667,7 +668,7 @@ fun AlbumArt(
 }
 
 @Composable
-fun SongInfo(song: Song) {
+fun SongInfo(song: Song, isLiked: Boolean, onToggleLike: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -689,8 +690,13 @@ fun SongInfo(song: Song) {
                 overflow = TextOverflow.Ellipsis
             )
         }
-        IconButton(onClick = { /* Like */ }) {
-            Icon(Icons.Default.FavoriteBorder, contentDescription = "Like", tint = Color.White, modifier = Modifier.size(28.dp))
+        IconButton(onClick = onToggleLike) {
+            Icon(
+                if (isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                contentDescription = if (isLiked) "Like" else "Unlike",
+                tint = if (isLiked) TidalAccent else Color.White,
+                modifier = Modifier.size(28.dp)
+            )
         }
     }
 }
