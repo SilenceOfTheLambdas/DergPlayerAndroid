@@ -71,17 +71,34 @@ class PlayerViewModel(
     private val _duration = MutableStateFlow(0L)
     val duration: StateFlow<Long> = _duration
 
-    private val _dominantColor = MutableStateFlow<Color>(Color.Black)
+    private val _dominantColor = MutableStateFlow<Color>(Color(0xFF00FF41))
     val dominantColor: StateFlow<Color> = _dominantColor
 
     private val _asciiArt = MutableStateFlow("")
     val asciiArt: StateFlow<String> = _asciiArt
 
-    private val _tuiSchemeName = MutableStateFlow("Matrix")
+    private val _tuiSchemeName = MutableStateFlow("Dynamic")
     val tuiSchemeName: StateFlow<String> = _tuiSchemeName
 
-    private val _tuiColors = MutableStateFlow(MatrixColors)
+    private val _tuiColors = MutableStateFlow(
+        TuiColors(
+            background = Color(0xFF0D0208),
+            surface = Color(0xFF0D0208),
+            primary = Color(0xFF00FF41),
+            onBackground = Color(0xFF00FF41),
+            onSurface = Color(0xFF00FF41),
+            scanlineColor = Color(0xFF00FF41).copy(alpha = 0.05f)
+        )
+    )
     val tuiColors: StateFlow<TuiColors> = _tuiColors
+
+    private val _volume = MutableStateFlow(1.0f)
+    val volume: StateFlow<Float> = _volume
+
+    private val _systemStatus = MutableStateFlow("")
+    val systemStatus: StateFlow<String> = _systemStatus
+
+    private var statusJob: Job? = null
 
     private var positionUpdateJob: Job? = null
 
@@ -260,6 +277,8 @@ class PlayerViewModel(
         }
         _shuffleMode.value = newMode
         
+        showStatus("SHUFFLE: $newMode")
+        
         if (newMode == ShuffleMode.ON) {
             // Shuffle the remaining queue
             val currentSong = _currentSong.value
@@ -278,17 +297,27 @@ class PlayerViewModel(
     }
 
     fun toggleRepeat() {
-        _repeatMode.value = when (_repeatMode.value) {
+        val newMode = when (_repeatMode.value) {
             Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ONE
             Player.REPEAT_MODE_ONE -> Player.REPEAT_MODE_ALL
             else -> Player.REPEAT_MODE_OFF
         }
+        _repeatMode.value = newMode
+
+        val modeText = when(newMode) {
+            Player.REPEAT_MODE_ONE -> "ONE"
+            Player.REPEAT_MODE_ALL -> "ALL"
+            else -> "OFF"
+        }
+        showStatus("REPEAT: $modeText")
     }
 
     fun toggleLike() {
         val song = _currentSong.value ?: return
         val newLiked = !_isLiked.value
         _isLiked.value = newLiked
+        
+        showStatus(if (newLiked) "FAVORITED" else "UNFAVORITED")
         
         viewModelScope.launch {
             youtubeClient.rateVideo(song.id, if (newLiked) "like" else "none")
@@ -320,7 +349,7 @@ class PlayerViewModel(
                 val bitmap = (result.drawable as BitmapDrawable).bitmap
                 
                 // Generate ASCII art
-                val ascii = TuiUtils.bitmapToAscii(bitmap, 40, 20)
+                val ascii = TuiUtils.bitmapToAscii(bitmap, 32, 16)
                 _asciiArt.value = ascii
 
                 val palette = Palette.from(bitmap).generate()
@@ -336,6 +365,23 @@ class PlayerViewModel(
     fun setTuiScheme(name: String) {
         _tuiSchemeName.value = name
         updateTuiColors()
+        showStatus("SCHEME: $name")
+    }
+
+    fun setVolume(value: Float) {
+        val clamped = value.coerceIn(0f, 1f)
+        _volume.value = clamped
+        _player.volume = clamped
+        showStatus("VOLUME: ${(clamped * 100).toInt()}%")
+    }
+
+    fun showStatus(message: String) {
+        statusJob?.cancel()
+        _systemStatus.value = message
+        statusJob = viewModelScope.launch {
+            delay(3000)
+            _systemStatus.value = ""
+        }
     }
 
     private fun updateTuiColors() {

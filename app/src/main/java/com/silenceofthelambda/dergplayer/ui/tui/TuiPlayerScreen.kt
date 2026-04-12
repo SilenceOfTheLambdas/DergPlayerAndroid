@@ -8,6 +8,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -26,8 +27,11 @@ fun TuiPlayerScreen(
     isLiked: Boolean = false,
     shuffleMode: ShuffleMode = ShuffleMode.OFF,
     repeatMode: Int = Player.REPEAT_MODE_OFF,
-    currentScheme: String = "Matrix",
+    currentScheme: String = "Dynamic",
     asciiArt: String = "",
+    nextTitle: String = "None",
+    volume: Float = 1.0f,
+    systemStatus: String = "",
     onPrevious: () -> Unit = {},
     onTogglePlay: () -> Unit = {},
     onNext: () -> Unit = {},
@@ -35,6 +39,8 @@ fun TuiPlayerScreen(
     onToggleShuffle: () -> Unit = {},
     onToggleRepeat: () -> Unit = {},
     onSetScheme: (String) -> Unit = {},
+    onSeek: (Float) -> Unit = {},
+    onVolumeChange: (Float) -> Unit = {},
     onBack: () -> Unit = {}
 ) {
     Box(modifier = Modifier.fillMaxSize().background(TuiTheme.colors.background)) {
@@ -44,7 +50,8 @@ fun TuiPlayerScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceBetween
         ) {
             // Header
             TuiBorderBox(modifier = Modifier.fillMaxWidth()) {
@@ -60,8 +67,6 @@ fun TuiPlayerScreen(
                     TuiButton(text = "LIBRARY", onClick = onBack)
                 }
             }
-            
-            Spacer(modifier = Modifier.height(16.dp))
             
             // Artwork Placeholder
             TuiBorderBox(
@@ -92,34 +97,49 @@ fun TuiPlayerScreen(
                 }
             }
             
-            Spacer(modifier = Modifier.height(16.dp))
-
             // Visualizer
-            TuiBorderBox(modifier = Modifier.fillMaxWidth(), title = "VISUALIZER") {
+            TuiBorderBox(modifier = Modifier.fillMaxWidth().weight(0.5f), title = "VISUALIZER") {
                 TuiVisualizer(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    modifier = Modifier.fillMaxSize().padding(vertical = 4.dp),
                     maxHeightLines = 5,
                     isPlaying = isPlaying
                 )
             }
             
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            // Info
-            TuiBorderBox(modifier = Modifier.fillMaxWidth(), title = "NOW PLAYING") {
-                Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                    TuiText("TITLE : $currentTitle", fontWeight = FontWeight.Bold)
-                    TuiText("ARTIST: $currentArtist")
+            // Playback Info
+            TuiBorderBox(modifier = Modifier.fillMaxWidth(), title = "PLAYBACK") {
+                Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            TuiText("TITLE : $currentTitle", fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            TuiText("ARTIST: $currentArtist", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        TuiText(
+                            text = if (isPlaying) " [RUNNING] " else " [PAUSED] ",
+                            color = if (isPlaying) TuiTheme.colors.primary else TuiTheme.colors.primary.copy(alpha = 0.5f),
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    TuiText("NEXT  : $nextTitle", style = TuiTheme.typography.copy(fontSize = 11.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            // Progress
+
+            // Progress Bar
             TuiBorderBox(modifier = Modifier.fillMaxWidth(), title = "PROGRESS") {
-                Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                    TuiProgressBar(progress = progress, modifier = Modifier.fillMaxWidth())
+                Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                    TuiProgressBar(
+                        progress = progress,
+                        modifier = Modifier.fillMaxWidth(),
+                        onProgressChange = onSeek
+                    )
+                    
                     Spacer(modifier = Modifier.height(4.dp))
+                    
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
@@ -129,62 +149,132 @@ fun TuiPlayerScreen(
                     }
                 }
             }
+
+            // Volume Control
+            TuiBorderBox(modifier = Modifier.fillMaxWidth(), title = "VOLUME") {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TuiText("VOL: ", style = TuiTheme.typography.copy(fontSize = 11.sp))
+                    TuiProgressBar(
+                        progress = volume,
+                        modifier = Modifier.weight(1f),
+                        onProgressChange = onVolumeChange
+                    )
+                }
+            }
             
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            // Controls
-            TuiBorderBox(modifier = Modifier.fillMaxWidth(), title = "CONTROLS") {
+            // Controls & Scheme
+            TuiBorderBox(modifier = Modifier.fillMaxWidth(), title = "CONTROL PANEL") {
                 Column(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        TuiButton(text = "< PREV", onClick = onPrevious)
-                        TuiButton(text = if (isPlaying) "|| PAUSE" else "> PLAY", onClick = onTogglePlay)
-                        TuiButton(text = "NEXT >", onClick = onNext)
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly
-                    ) {
-                        TuiButton(text = "SHUF: ${shuffleMode.name}", onClick = onToggleShuffle)
                         TuiButton(
-                            text = "REP: ${when(repeatMode) {
-                                Player.REPEAT_MODE_ONE -> "ONE"
-                                Player.REPEAT_MODE_ALL -> "ALL"
-                                else -> "OFF"
-                            }}",
-                            onClick = onToggleRepeat
+                            text = "PREV",
+                            onClick = onPrevious,
+                            modifier = Modifier.weight(1f)
+                        )
+                        TuiButton(
+                            text = if (isPlaying) "PAUSE" else "PLAY",
+                            onClick = onTogglePlay,
+                            modifier = Modifier.weight(1f)
+                        )
+                        TuiButton(
+                            text = "NEXT",
+                            onClick = onNext,
+                            modifier = Modifier.weight(1f)
                         )
                     }
+                    
                     Spacer(modifier = Modifier.height(8.dp))
-                    TuiButton(
-                        text = if (isLiked) "<3 LIKED" else "LIKE?",
-                        onClick = onToggleLike
-                    )
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        TuiButton(
+                            text = when(shuffleMode) {
+                                ShuffleMode.ON -> "SHUF"
+                                ShuffleMode.SMART -> "SMRT"
+                                else -> "SHUF"
+                            },
+                            onClick = onToggleShuffle,
+                            active = shuffleMode != ShuffleMode.OFF,
+                            modifier = Modifier.weight(1f)
+                        )
+                        TuiButton(
+                            text = when(repeatMode) {
+                                Player.REPEAT_MODE_ONE -> "REP1"
+                                Player.REPEAT_MODE_ALL -> "REPA"
+                                else -> "REPO"
+                            },
+                            onClick = onToggleRepeat,
+                            active = repeatMode != Player.REPEAT_MODE_OFF,
+                            modifier = Modifier.weight(1f)
+                        )
+                        TuiButton(
+                            text = "LIKE",
+                            onClick = onToggleLike,
+                            active = isLiked,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    // Styled Scheme Selector
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TuiText(
+                            text = "SELECT SCHEME: ",
+                            style = TuiTheme.typography.copy(fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        )
+                        
+                        val schemes = listOf("Dynamic" to "DYN", "Matrix" to "MTX", "Amber" to "AMB", "Cyberpunk" to "CYB")
+                        schemes.forEachIndexed { index, pair ->
+                            val (scheme, label) = pair
+                            TuiText(
+                                text = if (currentScheme == scheme) "[$label]" else " $label ",
+                                modifier = Modifier
+                                    .clickable { onSetScheme(scheme) }
+                                    .padding(horizontal = 4.dp),
+                                style = TuiTheme.typography.copy(fontSize = 11.sp),
+                                color = if (currentScheme == scheme) TuiTheme.colors.primary else TuiTheme.colors.primary.copy(alpha = 0.5f)
+                            )
+                            if (index < schemes.size - 1) {
+                                TuiText(
+                                    text = "·",
+                                    color = TuiTheme.colors.primary.copy(alpha = 0.3f),
+                                    style = TuiTheme.typography.copy(fontSize = 11.sp)
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Scheme Selector
-            TuiBorderBox(modifier = Modifier.fillMaxWidth(), title = "SCHEME") {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
+            // System Status Bar
+            if (systemStatus.isNotEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    listOf("Matrix", "Amber", "Cyberpunk", "Dynamic").forEach { scheme ->
-                        TuiText(
-                            text = if (currentScheme == scheme) "[$scheme]" else " $scheme ",
-                            modifier = Modifier.clickable { onSetScheme(scheme) },
-                            fontWeight = if (currentScheme == scheme) FontWeight.Bold else FontWeight.Normal,
-                            color = if (currentScheme == scheme) TuiTheme.colors.primary else TuiTheme.colors.primary.copy(alpha = 0.6f)
-                        )
-                    }
+                    TuiText(
+                        text = ">>> $systemStatus <<<",
+                        fontWeight = FontWeight.Bold,
+                        style = TuiTheme.typography.copy(fontSize = 12.sp)
+                    )
                 }
             }
         }

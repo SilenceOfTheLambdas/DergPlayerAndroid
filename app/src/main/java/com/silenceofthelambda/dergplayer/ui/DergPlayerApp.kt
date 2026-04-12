@@ -30,6 +30,9 @@ fun DergPlayerApp(viewModel: PlayerViewModel, youtubeClient: YouTubeClient, refr
     val playbackPosition by viewModel.playbackPosition.collectAsState()
     val duration by viewModel.duration.collectAsState()
     val asciiArt by viewModel.asciiArt.collectAsState()
+    val remainingQueue by viewModel.remainingQueue.collectAsState()
+    val volume by viewModel.volume.collectAsState()
+    val systemStatus by viewModel.systemStatus.collectAsState()
 
     TuiTheme(colors = tuiColors) {
         Box(modifier = Modifier.fillMaxSize().background(TuiTheme.colors.background)) {
@@ -97,6 +100,9 @@ fun DergPlayerApp(viewModel: PlayerViewModel, youtubeClient: YouTubeClient, refr
                                 repeatMode = repeatMode,
                                 currentScheme = tuiSchemeName,
                                 asciiArt = asciiArt,
+                                nextTitle = remainingQueue.firstOrNull()?.title ?: "None",
+                                volume = volume,
+                                systemStatus = systemStatus,
                                 onPrevious = { viewModel.skipToPrevious() },
                                 onTogglePlay = { viewModel.togglePlayPause() },
                                 onNext = { viewModel.skipToNext() },
@@ -104,6 +110,8 @@ fun DergPlayerApp(viewModel: PlayerViewModel, youtubeClient: YouTubeClient, refr
                                 onToggleShuffle = { viewModel.toggleShuffle() },
                                 onToggleRepeat = { viewModel.toggleRepeat() },
                                 onSetScheme = { viewModel.setTuiScheme(it) },
+                                onSeek = { viewModel.seekTo((it * duration).toLong()) },
+                                onVolumeChange = { viewModel.setVolume(it) },
                                 onBack = { navController.popBackStack() }
                             )
                         }

@@ -5,11 +5,14 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
@@ -17,7 +20,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -33,7 +40,8 @@ fun TuiText(
     fontWeight: FontWeight = FontWeight.Normal,
     style: TextStyle = TuiTheme.typography,
     maxLines: Int = Int.MAX_VALUE,
-    overflow: TextOverflow = TextOverflow.Clip
+    overflow: TextOverflow = TextOverflow.Clip,
+    softWrap: Boolean = true
 ) {
     Text(
         text = text,
@@ -41,7 +49,8 @@ fun TuiText(
         color = color,
         style = style.copy(fontWeight = fontWeight),
         maxLines = maxLines,
-        overflow = overflow
+        overflow = overflow,
+        softWrap = softWrap
     )
 }
 
@@ -101,17 +110,24 @@ fun ScanlineOverlay() {
 fun TuiButton(
     text: String,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    active: Boolean = false
 ) {
+    val haptic = LocalHapticFeedback.current
     Box(
         modifier = modifier
-            .background(TuiTheme.colors.background)
+            .background(if (active) TuiTheme.colors.primary else TuiTheme.colors.background)
             .border(1.dp, TuiTheme.colors.primary)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .clickable {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                onClick()
+            }
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        contentAlignment = Alignment.Center
     ) {
         TuiText(
             text = "[ $text ]",
+            color = if (active) TuiTheme.colors.background else TuiTheme.colors.primary,
             fontWeight = FontWeight.Bold
         )
     }
@@ -120,9 +136,26 @@ fun TuiButton(
 @Composable
 fun TuiProgressBar(
     progress: Float,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onProgressChange: ((Float) -> Unit)? = null
 ) {
-    androidx.compose.foundation.layout.BoxWithConstraints(modifier = modifier) {
+    androidx.compose.foundation.layout.BoxWithConstraints(
+        modifier = modifier.then(
+            if (onProgressChange != null) {
+                Modifier.pointerInput(Unit) {
+                    detectDragGestures(
+                        onDrag = { change, _ ->
+                            onProgressChange((change.position.x / size.width).coerceIn(0f, 1f))
+                            change.consume()
+                        },
+                        onDragStart = { offset ->
+                            onProgressChange((offset.x / size.width).coerceIn(0f, 1f))
+                        }
+                    )
+                }
+            } else Modifier
+        )
+    ) {
         val density = androidx.compose.ui.platform.LocalDensity.current
         val fontSize = TuiTheme.typography.fontSize
         // Conservative estimate for monospaced font character width
@@ -140,7 +173,12 @@ fun TuiProgressBar(
             append("]")
         }
 
-        TuiText(text = barText)
+        TuiText(
+            text = barText,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Clip
+        )
     }
 }
 
@@ -187,24 +225,25 @@ fun TuiVisualizer(
     isPlaying: Boolean = false,
     maxHeightLines: Int = 6
 ) {
+    val transition = androidx.compose.animation.core.rememberInfiniteTransition()
+    val primaryColor = TuiTheme.colors.primary
+    
     androidx.compose.foundation.layout.BoxWithConstraints(modifier = modifier) {
         val density = androidx.compose.ui.platform.LocalDensity.current
         val fontSize = TuiTheme.typography.fontSize
-        // Estimated width for JetBrains Mono character
-        val charWidth = with(density) { (fontSize.toPx() * 0.6f).toDp() }
+        val charHeightPx = with(density) { fontSize.toPx() }
+        val charWidthPx = charHeightPx * 0.6f
         
-        val barCount = (maxWidth / charWidth).toInt().coerceAtLeast(10)
-        val totalSteps = maxHeightLines * 2
-
-        val transition = androidx.compose.animation.core.rememberInfiniteTransition()
+        val barCount = (constraints.maxWidth / charWidthPx).toInt().coerceAtLeast(10)
+        
         val animatedValues = (0 until barCount).map { i ->
             if (isPlaying) {
                 transition.animateFloat(
                     initialValue = 0.1f,
-                    targetValue = 1f,
+                    targetValue = 1.0f,
                     animationSpec = androidx.compose.animation.core.infiniteRepeatable(
                         animation = androidx.compose.animation.core.tween(
-                            durationMillis = (400 + (Math.random() * 600)).toInt(),
+                            durationMillis = (500 + (Math.sin(i.toDouble() * 0.5) * 200) + (Math.random() * 300)).toInt(),
                             easing = androidx.compose.animation.core.FastOutSlowInEasing
                         ),
                         repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
@@ -216,23 +255,39 @@ fun TuiVisualizer(
             }
         }
 
-        TuiText(
-            text = buildString {
-                for (l in maxHeightLines - 1 downTo 0) {
-                    for (i in 0 until barCount) {
-                        val h = (animatedValues[i].value * totalSteps).toInt()
-                        if (h >= 2 * l + 2) {
-                            append("█")
-                        } else if (h == 2 * l + 1) {
-                            append("▄")
-                        } else {
-                            append(" ")
-                        }
-                    }
-                    if (l > 0) append("\n")
+        androidx.compose.foundation.Canvas(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            val totalWidth = size.width
+            val totalHeight = size.height
+            val barW = totalWidth / barCount
+            val blockH = totalHeight / maxHeightLines
+            
+            for (i in 0 until barCount) {
+                val value = animatedValues[i].value
+                val blocksToDraw = (value * maxHeightLines).toInt().coerceIn(0, maxHeightLines)
+                
+                for (j in 0 until blocksToDraw) {
+                    drawRect(
+                        color = primaryColor,
+                        topLeft = Offset(i * barW + barW * 0.1f, totalHeight - (j + 1) * blockH + blockH * 0.1f),
+                        size = Size(barW * 0.8f, blockH * 0.8f)
+                    )
                 }
-            },
-            modifier = Modifier.fillMaxWidth()
-        )
+                
+                // Partial block for smoother look
+                val remainder = (value * maxHeightLines) - blocksToDraw
+                if (remainder > 0.2f && blocksToDraw < maxHeightLines) {
+                    val partialH = if (remainder > 0.6f) blockH * 0.8f else blockH * 0.4f
+                    val yOffset = if (remainder > 0.6f) blockH * 0.1f else blockH * 0.5f
+                    
+                    drawRect(
+                        color = primaryColor,
+                        topLeft = Offset(i * barW + barW * 0.1f, totalHeight - (blocksToDraw + 1) * blockH + yOffset),
+                        size = Size(barW * 0.8f, partialH)
+                    )
+                }
+            }
+        }
     }
 }
