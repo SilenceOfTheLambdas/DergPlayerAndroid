@@ -17,6 +17,10 @@ import com.silenceofthelambda.dergplayer.api.YouTubeClient
 import com.silenceofthelambda.dergplayer.api.StreamExtractor
 import com.silenceofthelambda.dergplayer.model.Song
 import com.silenceofthelambda.dergplayer.model.ShuffleMode
+import com.silenceofthelambda.dergplayer.ui.tui.AmberColors
+import com.silenceofthelambda.dergplayer.ui.tui.CyberpunkColors
+import com.silenceofthelambda.dergplayer.ui.tui.MatrixColors
+import com.silenceofthelambda.dergplayer.ui.tui.TuiColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -68,6 +72,15 @@ class PlayerViewModel(
 
     private val _dominantColor = MutableStateFlow<Color>(Color.Black)
     val dominantColor: StateFlow<Color> = _dominantColor
+
+    private val _isTuiMode = MutableStateFlow(false)
+    val isTuiMode: StateFlow<Boolean> = _isTuiMode
+
+    private val _tuiSchemeName = MutableStateFlow("Matrix")
+    val tuiSchemeName: StateFlow<String> = _tuiSchemeName
+
+    private val _tuiColors = MutableStateFlow(MatrixColors)
+    val tuiColors: StateFlow<TuiColors> = _tuiColors
 
     private var positionUpdateJob: Job? = null
 
@@ -307,7 +320,38 @@ class PlayerViewModel(
                 val palette = Palette.from(bitmap).generate()
                 val color = palette.getVibrantColor(palette.getMutedColor(0xFF121212.toInt()))
                 _dominantColor.value = Color(color)
+                if (_tuiSchemeName.value == "Dynamic") {
+                    updateTuiColors()
+                }
             }
+        }
+    }
+
+    fun toggleTuiMode() {
+        _isTuiMode.value = !_isTuiMode.value
+    }
+
+    fun setTuiScheme(name: String) {
+        _tuiSchemeName.value = name
+        updateTuiColors()
+    }
+
+    private fun updateTuiColors() {
+        _tuiColors.value = when (_tuiSchemeName.value) {
+            "Amber" -> AmberColors
+            "Cyberpunk" -> CyberpunkColors
+            "Dynamic" -> {
+                val dominant = _dominantColor.value
+                TuiColors(
+                    background = Color(0xFF0D0208),
+                    surface = Color(0xFF0D0208),
+                    primary = dominant,
+                    onBackground = dominant,
+                    onSurface = dominant,
+                    scanlineColor = dominant.copy(alpha = 0.05f)
+                )
+            }
+            else -> MatrixColors
         }
     }
 

@@ -47,6 +47,8 @@ import com.silenceofthelambda.dergplayer.model.ShuffleMode
 import com.silenceofthelambda.dergplayer.ui.theme.TidalAccent
 import com.silenceofthelambda.dergplayer.ui.theme.TidalGrey
 import com.silenceofthelambda.dergplayer.ui.theme.TidalLightGrey
+import com.silenceofthelambda.dergplayer.ui.tui.TuiPlayerScreen
+import com.silenceofthelambda.dergplayer.ui.tui.TuiTheme
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -133,9 +135,39 @@ fun DergPlayerApp(viewModel: PlayerViewModel, youtubeClient: YouTubeClient, refr
                         }
                     )
                 }
-                composable(Screen.Player.route) {
-                    PlayerScreen(viewModel = viewModel, onBack = { navController.popBackStack() })
-                }
+    composable(Screen.Player.route) {
+        val isTuiMode by viewModel.isTuiMode.collectAsState()
+        val tuiColors by viewModel.tuiColors.collectAsState()
+        val tuiSchemeName by viewModel.tuiSchemeName.collectAsState()
+        val currentSong by viewModel.currentSong.collectAsState()
+        val isPlaying by viewModel.isPlaying.collectAsState()
+        val isLiked by viewModel.isLiked.collectAsState()
+        val playbackPosition by viewModel.playbackPosition.collectAsState()
+        val duration by viewModel.duration.collectAsState()
+
+        if (isTuiMode) {
+            TuiTheme(colors = tuiColors) {
+                TuiPlayerScreen(
+                    currentTitle = currentSong?.title ?: "Unknown Title",
+                    currentArtist = currentSong?.artist ?: "Unknown Artist",
+                    progress = if (duration > 0) playbackPosition.toFloat() / duration else 0f,
+                    currentTime = formatDuration(playbackPosition),
+                    totalTime = formatDuration(duration),
+                    isPlaying = isPlaying,
+                    isLiked = isLiked,
+                    currentScheme = tuiSchemeName,
+                    onPrevious = { viewModel.skipToPrevious() },
+                    onTogglePlay = { viewModel.togglePlayPause() },
+                    onNext = { viewModel.skipToNext() },
+                    onToggleLike = { viewModel.toggleLike() },
+                    onSetScheme = { viewModel.setTuiScheme(it) },
+                    onToggleTui = { viewModel.toggleTuiMode() }
+                )
+            }
+        } else {
+            PlayerScreen(viewModel = viewModel, onBack = { navController.popBackStack() })
+        }
+    }
             }
 
             // Floating MiniPlayer Pill (Glassmorphism)
@@ -535,7 +567,11 @@ fun PlayerScreen(viewModel: PlayerViewModel, onBack: () -> Unit) {
                 Column(
                     modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp)
                 ) {
-                    PlayerHeader(onBack = onBack, onShowQueue = { showQueue = true })
+                    PlayerHeader(
+                        onBack = onBack,
+                        onShowQueue = { showQueue = true },
+                        onToggleTui = { viewModel.toggleTuiMode() }
+                    )
                     
                     Spacer(modifier = Modifier.weight(1f))
                     
@@ -583,7 +619,7 @@ fun PlayerScreen(viewModel: PlayerViewModel, onBack: () -> Unit) {
 }
 
 @Composable
-fun PlayerHeader(onBack: () -> Unit, onShowQueue: () -> Unit) {
+fun PlayerHeader(onBack: () -> Unit, onShowQueue: () -> Unit, onToggleTui: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -594,11 +630,16 @@ fun PlayerHeader(onBack: () -> Unit, onShowQueue: () -> Unit) {
         IconButton(onClick = onBack) {
             Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Minimize", tint = Color.White, modifier = Modifier.size(36.dp))
         }
-        Text(
-            "NOW PLAYING",
-            style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 2.sp),
-            color = Color.White.copy(alpha = 0.7f)
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "NOW PLAYING",
+                style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 2.sp),
+                color = Color.White.copy(alpha = 0.7f)
+            )
+            IconButton(onClick = onToggleTui) {
+                Icon(Icons.Default.Terminal, contentDescription = "TUI Mode", tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(20.dp))
+            }
+        }
         IconButton(onClick = onShowQueue) {
             Icon(Icons.Default.PlaylistPlay, contentDescription = "Queue", tint = Color.White, modifier = Modifier.size(28.dp))
         }

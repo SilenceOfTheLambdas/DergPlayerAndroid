@@ -17,6 +17,11 @@ An Android media player application built with Jetpack Compose, Media3, and YouT
 - **Networking**: OkHttp, Retrofit
 - **Image Loading**: Coil
 - **Extractors**: NewPipe Extractor
+- **TUI Mode**: Optional retro Terminal User Interface design.
+
+## TUI Design
+
+The application is moving towards a unique retro Terminal User Interface (TUI) design. For more details on the design principles and roadmap, see [TUI_DESIGN.md](TUI_DESIGN.md).
 
 ## Setup
 
