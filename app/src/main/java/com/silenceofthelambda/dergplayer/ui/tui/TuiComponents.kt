@@ -16,7 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -144,17 +144,19 @@ fun TuiProgressBar(
     modifier: Modifier = Modifier,
     onProgressChange: ((Float) -> Unit)? = null
 ) {
+    val currentOnProgressChange by rememberUpdatedState(onProgressChange)
+
     androidx.compose.foundation.layout.BoxWithConstraints(
         modifier = modifier.then(
-            if (onProgressChange != null) {
+            if (currentOnProgressChange != null) {
                 Modifier.pointerInput(Unit) {
                     detectDragGestures(
                         onDrag = { change, _ ->
-                            onProgressChange((change.position.x / size.width).coerceIn(0f, 1f))
+                            currentOnProgressChange?.invoke((change.position.x / size.width).coerceIn(0f, 1f))
                             change.consume()
                         },
                         onDragStart = { offset ->
-                            onProgressChange((offset.x / size.width).coerceIn(0f, 1f))
+                            currentOnProgressChange?.invoke((offset.x / size.width).coerceIn(0f, 1f))
                         }
                     )
                 }

@@ -2,18 +2,23 @@ package com.silenceofthelambda.dergplayer.ui
 
 import android.app.Application
 import android.Manifest
+import android.content.ComponentName
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import android.media.audiofx.Visualizer
+import android.net.Uri
 import androidx.compose.ui.graphics.Color
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
-import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.session.MediaController
+import androidx.media3.session.SessionToken
 import androidx.palette.graphics.Palette
+import com.google.common.util.concurrent.ListenableFuture
 import coil.ImageLoader
 import coil.request.ImageRequest
 import coil.request.SuccessResult
@@ -40,8 +45,8 @@ class PlayerViewModel(
 ) : AndroidViewModel(application) {
 
     private val extractor = StreamExtractor()
-    private val _player = ExoPlayer.Builder(application).build()
-    val player: Player = _player
+    private var controller: MediaController? = null
+    private var controllerFuture: ListenableFuture<MediaController>? = null
 
     private val _currentSong = MutableStateFlow<Song?>(null)
     val currentSong: StateFlow<Song?> = _currentSong
@@ -112,43 +117,65 @@ class PlayerViewModel(
 
     private var positionUpdateJob: Job? = null
 
+    private val playerListener = object : Player.Listener {
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            _isPlaying.value = isPlaying
+            if (isPlaying) {
+                startPositionUpdates()
+                updateVisualizer(true)
+            } else {
+                stopPositionUpdates()
+                updateVisualizer(false)
+            }
+        }
+
+        override fun onAudioSessionIdChanged(audioSessionId: Int) {
+            android.util.Log.d("PlayerViewModel", "Audio session ID changed: $audioSessionId")
+            currentAudioSessionId = audioSessionId
+            if (_isPlaying.value) {
+                updateVisualizer(true)
+            }
+        }
+
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            if (playbackState == Player.STATE_READY) {
+                _duration.value = controller?.duration ?: 0L
+            } else if (playbackState == Player.STATE_ENDED) {
+                onSongEnded()
+            }
+        }
+    }
+
     init {
-        _player.addListener(object : Player.Listener {
-            override fun onIsPlayingChanged(isPlaying: Boolean) {
-                _isPlaying.value = isPlaying
-                if (isPlaying) {
+        val sessionToken = SessionToken(application, ComponentName(application, com.silenceofthelambda.dergplayer.service.MediaPlaybackService::class.java))
+        val future = MediaController.Builder(application, sessionToken).buildAsync()
+        controllerFuture = future
+        future.addListener({
+            try {
+                val ctrl = future.get()
+                controller = ctrl
+                ctrl.addListener(playerListener)
+                
+                // Sync initial state
+                _isPlaying.value = ctrl.isPlaying
+                _duration.value = ctrl.duration
+                _playbackPosition.value = ctrl.currentPosition
+                _volume.value = ctrl.volume
+                
+                if (ctrl.isPlaying) {
                     startPositionUpdates()
-                    updateVisualizer(true)
-                } else {
-                    stopPositionUpdates()
-                    updateVisualizer(false)
                 }
+            } catch (e: Exception) {
+                android.util.Log.e("PlayerViewModel", "Error connecting to MediaController", e)
             }
-
-            override fun onAudioSessionIdChanged(audioSessionId: Int) {
-                android.util.Log.d("PlayerViewModel", "Audio session ID changed: $audioSessionId")
-                currentAudioSessionId = audioSessionId
-                if (_isPlaying.value) {
-                    updateVisualizer(true)
-                }
-            }
-
-            override fun onPlaybackStateChanged(playbackState: Int) {
-                if (playbackState == Player.STATE_READY) {
-                    _duration.value = _player.duration
-                } else if (playbackState == Player.STATE_ENDED) {
-                    onSongEnded()
-                }
-            }
-        })
-        currentAudioSessionId = _player.audioSessionId
+        }, ContextCompat.getMainExecutor(application))
     }
 
     private fun startPositionUpdates() {
         positionUpdateJob?.cancel()
         positionUpdateJob = viewModelScope.launch {
             while (true) {
-                _playbackPosition.value = _player.currentPosition
+                _playbackPosition.value = controller?.currentPosition ?: 0L
                 // Periodically try to re-init visualizer if it should be enabled but failed (e.g. permission was missing)
                 try {
                     val isVisActive = try { visualizer?.enabled ?: false } catch (e: Exception) { false }
@@ -179,11 +206,11 @@ class PlayerViewModel(
         }
     }
 
-    private fun onSongEnded() {
+    fun onSongEnded() {
         when (_repeatMode.value) {
             Player.REPEAT_MODE_ONE -> {
-                _player.seekTo(0)
-                _player.play()
+                controller?.seekTo(0)
+                controller?.play()
             }
             Player.REPEAT_MODE_ALL -> {
                 skipToNext()
@@ -278,14 +305,22 @@ class PlayerViewModel(
             }
             
             if (info.streamUrl != null) {
+                val mediaMetadata = MediaMetadata.Builder()
+                    .setTitle(song.title)
+                    .setArtist(song.artist)
+                    .setArtworkUri(Uri.parse(song.thumbnail))
+                    .build()
                 val mediaItem = MediaItem.Builder()
                     .setMediaId(song.id)
                     .setUri(info.streamUrl)
+                    .setMediaMetadata(mediaMetadata)
                     .build()
 
-                _player.setMediaItem(mediaItem)
-                _player.prepare()
-                _player.play()
+                controller?.let {
+                    it.setMediaItem(mediaItem)
+                    it.prepare()
+                    it.play()
+                }
             } else {
                 android.util.Log.e("PlayerViewModel", "Could not get stream URL for song ${song.id}")
             }
@@ -335,15 +370,15 @@ class PlayerViewModel(
     }
 
     fun seekTo(position: Long) {
-        _player.seekTo(position)
+        controller?.seekTo(position)
         _playbackPosition.value = position
     }
 
     fun togglePlayPause() {
-        if (_player.isPlaying) {
-            _player.pause()
+        if (controller?.isPlaying == true) {
+            controller?.pause()
         } else {
-            _player.play()
+            controller?.play()
         }
     }
 
@@ -360,9 +395,9 @@ class PlayerViewModel(
     }
 
     fun skipToPrevious() {
-        if (_player.currentPosition > 3000) {
+        if ((controller?.currentPosition ?: 0L) > 3000) {
             showStatus("RESTARTING TRACK")
-            _player.seekTo(0)
+            controller?.seekTo(0)
             return
         }
 
@@ -373,7 +408,7 @@ class PlayerViewModel(
         if (currentIndex > 0) {
             playSong(currentList[currentIndex - 1])
         } else {
-            _player.seekTo(0)
+            controller?.seekTo(0)
         }
     }
 
@@ -479,7 +514,7 @@ class PlayerViewModel(
     fun setVolume(value: Float) {
         val clamped = value.coerceIn(0f, 1f)
         _volume.value = clamped
-        _player.volume = clamped
+        controller?.volume = clamped
         showStatus("VOLUME: ${(clamped * 100).toInt()}%")
     }
 
@@ -523,7 +558,7 @@ class PlayerViewModel(
                 return
             }
 
-            val sessionId = if (currentAudioSessionId == 0) _player.audioSessionId else currentAudioSessionId
+            val sessionId = currentAudioSessionId
             if (sessionId == 0) {
                 android.util.Log.w("PlayerViewModel", "Visualizer sessionId is 0")
                 return 
@@ -601,6 +636,9 @@ class PlayerViewModel(
     override fun onCleared() {
         super.onCleared()
         visualizer?.release()
-        _player.release()
+        controller?.removeListener(playerListener)
+        controllerFuture?.let {
+            MediaController.releaseFuture(it)
+        }
     }
 }

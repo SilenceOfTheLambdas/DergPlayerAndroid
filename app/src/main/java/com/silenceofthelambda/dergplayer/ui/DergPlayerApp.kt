@@ -103,6 +103,21 @@ fun DergPlayerApp(viewModel: PlayerViewModel, youtubeClient: YouTubeClient, refr
                             )
                         }
                         composable(Screen.Player.route) {
+                            val onPrevious: () -> Unit = remember { { viewModel.skipToPrevious() } }
+                            val onTogglePlay: () -> Unit = remember { { viewModel.togglePlayPause() } }
+                            val onNext: () -> Unit = remember { { viewModel.skipToNext() } }
+                            val onToggleLike: () -> Unit = remember { { viewModel.toggleLike() } }
+                            val onToggleShuffle: () -> Unit = remember { { viewModel.toggleShuffle() } }
+                            val onToggleRepeat: () -> Unit = remember { { viewModel.toggleRepeat() } }
+                            val onSetScheme: (String) -> Unit = remember { { s -> viewModel.setTuiScheme(s) } }
+                            val onSeek: (Float) -> Unit = remember(duration) { { p -> viewModel.seekTo((p * duration).toLong()) } }
+                            val onVolumeChange: (Float) -> Unit = remember { { v -> viewModel.setVolume(v) } }
+                            val onQueueClick: () -> Unit = remember { { navController.navigate(Screen.Queue.route) } }
+                            val onBack: () -> Unit = remember { { 
+                                navController.popBackStack()
+                                Unit
+                            } }
+
                             TuiPlayerScreen(
                                 currentTitle = currentSong?.title ?: "Unknown Title",
                                 currentArtist = currentSong?.artist ?: "Unknown Artist",
@@ -119,17 +134,17 @@ fun DergPlayerApp(viewModel: PlayerViewModel, youtubeClient: YouTubeClient, refr
                                 volume = volume,
                                 systemStatus = systemStatus,
                                 visualizerMagnitudes = visualizerMagnitudes,
-                                onPrevious = { viewModel.skipToPrevious() },
-                                onTogglePlay = { viewModel.togglePlayPause() },
-                                onNext = { viewModel.skipToNext() },
-                                onToggleLike = { viewModel.toggleLike() },
-                                onToggleShuffle = { viewModel.toggleShuffle() },
-                                onToggleRepeat = { viewModel.toggleRepeat() },
-                                onSetScheme = { viewModel.setTuiScheme(it) },
-                                onSeek = { viewModel.seekTo((it * duration).toLong()) },
-                                onVolumeChange = { viewModel.setVolume(it) },
-                                onQueueClick = { navController.navigate(Screen.Queue.route) },
-                                onBack = { navController.popBackStack() }
+                                onPrevious = onPrevious,
+                                onTogglePlay = onTogglePlay,
+                                onNext = onNext,
+                                onToggleLike = onToggleLike,
+                                onToggleShuffle = onToggleShuffle,
+                                onToggleRepeat = onToggleRepeat,
+                                onSetScheme = onSetScheme,
+                                onSeek = onSeek,
+                                onVolumeChange = onVolumeChange,
+                                onQueueClick = onQueueClick,
+                                onBack = onBack
                             )
                         }
                         composable(Screen.Queue.route) {

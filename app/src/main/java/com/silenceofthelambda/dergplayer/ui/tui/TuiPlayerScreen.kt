@@ -49,7 +49,36 @@ fun TuiPlayerScreen(
     onQueueClick: () -> Unit = {},
     onBack: () -> Unit = {}
 ) {
-    Box(modifier = Modifier.fillMaxSize().background(TuiTheme.colors.background)) {
+    var offsetX by remember { mutableStateOf(0f) }
+    val haptic = LocalHapticFeedback.current
+    val currentOnNext by rememberUpdatedState(onNext)
+    val currentOnPrevious by rememberUpdatedState(onPrevious)
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(TuiTheme.colors.background)
+            .pointerInput(Unit) {
+                val threshold = 50.dp.toPx()
+                detectHorizontalDragGestures(
+                    onDragStart = { offsetX = 0f },
+                    onDragEnd = {
+                        if (offsetX < -threshold) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            currentOnNext()
+                        } else if (offsetX > threshold) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            currentOnPrevious()
+                        }
+                        offsetX = 0f
+                    },
+                    onHorizontalDrag = { change, dragAmount ->
+                        offsetX += dragAmount
+                        change.consume()
+                    }
+                )
+            }
+    ) {
         ScanlineOverlay()
         
         Column(
@@ -82,32 +111,8 @@ fun TuiPlayerScreen(
                 modifier = Modifier.fillMaxWidth().weight(1f),
                 title = "ARTWORK"
             ) {
-                var offsetX by remember { mutableStateOf(0f) }
-                val haptic = LocalHapticFeedback.current
-
                 Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .pointerInput(onNext, onPrevious) {
-                            val threshold = 80.dp.toPx()
-                            detectHorizontalDragGestures(
-                                onDragStart = { offsetX = 0f },
-                                onDragEnd = {
-                                    if (offsetX < -threshold) {
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        onNext()
-                                    } else if (offsetX > threshold) {
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        onPrevious()
-                                    }
-                                    offsetX = 0f
-                                },
-                                onHorizontalDrag = { change, dragAmount ->
-                                    offsetX += dragAmount
-                                    change.consume()
-                                }
-                            )
-                        },
+                    modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
                     if (asciiArt.isNotEmpty()) {
