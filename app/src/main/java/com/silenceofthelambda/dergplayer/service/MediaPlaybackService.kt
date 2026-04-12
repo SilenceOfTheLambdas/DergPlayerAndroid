@@ -7,6 +7,7 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.Player
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.CommandButton
 import androidx.media3.session.MediaSession
@@ -30,7 +31,19 @@ class MediaPlaybackService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
-        val p = ExoPlayer.Builder(this).build()
+        
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                32 * 1024,      // Min buffer (default is 50s, reduced for responsiveness)
+                64 * 1024,      // Max buffer
+                1000,           // Buffer for playback (default is 2.5s)
+                1500            // Buffer for playback after rebuffer
+            )
+            .build()
+            
+        val p = ExoPlayer.Builder(this)
+            .setLoadControl(loadControl)
+            .build()
         exoPlayer = p
         val audioAttributes = AudioAttributes.Builder()
             .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
@@ -80,6 +93,15 @@ class MediaPlaybackService : MediaSessionService() {
             .build()
     }
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        exoPlayer?.let {
+            it.pause()
+            it.stop()
+        }
+        stopSelf()
+        super.onTaskRemoved(rootIntent)
+    }
+
     private inner class CustomMediaSessionCallback : MediaSession.Callback {
         override fun onConnect(
             session: MediaSession,
@@ -105,27 +127,6 @@ class MediaPlaybackService : MediaSessionService() {
             }
         }
 
-        override fun onPlayerCommandRequest(
-            session: MediaSession,
-            controller: MediaSession.ControllerInfo,
-            playerCommand: Int
-        ): Int {
-            when (playerCommand) {
-                Player.COMMAND_SEEK_TO_NEXT -> {
-                    session.connectedControllers.forEach {
-                        session.sendCustomCommand(it, SessionCommand(COMMAND_SKIP_NEXT, Bundle.EMPTY), Bundle.EMPTY)
-                    }
-                    return SessionResult.RESULT_SUCCESS
-                }
-                Player.COMMAND_SEEK_TO_PREVIOUS -> {
-                    session.connectedControllers.forEach {
-                        session.sendCustomCommand(it, SessionCommand(COMMAND_SKIP_PREV, Bundle.EMPTY), Bundle.EMPTY)
-                    }
-                    return SessionResult.RESULT_SUCCESS
-                }
-            }
-            return super.onPlayerCommandRequest(session, controller, playerCommand)
-        }
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {

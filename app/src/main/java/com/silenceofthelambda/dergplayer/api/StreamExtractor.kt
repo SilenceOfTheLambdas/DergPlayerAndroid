@@ -16,7 +16,7 @@ class StreamExtractor {
         val relatedSongs: List<Song>
     )
 
-    private val cache = LruCache<String, FullStreamInfo>(20)
+    private val cache = LruCache<String, FullStreamInfo>(50)
 
     suspend fun getFullStreamInfo(videoId: String): FullStreamInfo = withContext(Dispatchers.IO) {
         cache.get(videoId)?.let { return@withContext it }

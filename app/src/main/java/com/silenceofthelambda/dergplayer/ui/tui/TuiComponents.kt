@@ -19,6 +19,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -96,19 +97,23 @@ fun TuiBorderBox(
 @Composable
 fun ScanlineOverlay() {
     val scanlineColor = TuiTheme.colors.scanlineColor
-    Canvas(modifier = Modifier.fillMaxSize()) {
-        val lineHeight = 4.dp.toPx()
-        val count = (size.height / lineHeight).toInt()
-        for (i in 0..count) {
-            val y = i * lineHeight
-            drawLine(
-                color = scanlineColor,
-                start = Offset(0f, y),
-                end = Offset(size.width, y),
-                strokeWidth = 1.dp.toPx()
-            )
-        }
-    }
+    androidx.compose.foundation.layout.Spacer(
+        modifier = Modifier
+            .fillMaxSize()
+            .drawBehind {
+                val lineHeight = 4.dp.toPx()
+                val count = (size.height / lineHeight).toInt()
+                for (i in 0..count) {
+                    val y = i * lineHeight
+                    drawLine(
+                        color = scanlineColor,
+                        start = Offset(0f, y),
+                        end = Offset(size.width, y),
+                        strokeWidth = 1.dp.toPx()
+                    )
+                }
+            }
+    )
 }
 
 @Composable
@@ -228,7 +233,7 @@ fun TuiLoadingIndicator(modifier: Modifier = Modifier) {
 
 @Composable
 fun TuiVisualizer(
-    magnitudes: List<Float>,
+    magnitudesProvider: () -> List<Float>,
     modifier: Modifier = Modifier,
     maxHeightLines: Int = 8
 ) {
@@ -238,6 +243,7 @@ fun TuiVisualizer(
         androidx.compose.foundation.Canvas(
             modifier = Modifier.fillMaxSize()
         ) {
+            val magnitudes = magnitudesProvider()
             val totalWidth = size.width
             val totalHeight = size.height
             

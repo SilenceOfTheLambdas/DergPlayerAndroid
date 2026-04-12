@@ -35,7 +35,8 @@ fun DergPlayerApp(viewModel: PlayerViewModel, youtubeClient: YouTubeClient, refr
     val remainingQueue by viewModel.remainingQueue.collectAsState()
     val volume by viewModel.volume.collectAsState()
     val systemStatus by viewModel.systemStatus.collectAsState()
-    val visualizerMagnitudes by viewModel.visualizerMagnitudes.collectAsState()
+    val visualizerMagnitudesState = viewModel.visualizerMagnitudes.collectAsState()
+    val visualizerMagnitudesProvider = remember { { visualizerMagnitudesState.value } }
 
     TuiTheme(colors = tuiColors) {
         Box(modifier = Modifier.fillMaxSize().background(TuiTheme.colors.background)) {
@@ -80,6 +81,7 @@ fun DergPlayerApp(viewModel: PlayerViewModel, youtubeClient: YouTubeClient, refr
                             TuiPlaylistDetailScreen(
                                 playlistId = playlistId,
                                 youtubeClient = youtubeClient,
+                                playerViewModel = viewModel,
                                 refreshTrigger = refreshTrigger,
                                 currentSongId = currentSong?.id,
                                 onSongClick = { song, list -> 
@@ -93,6 +95,7 @@ fun DergPlayerApp(viewModel: PlayerViewModel, youtubeClient: YouTubeClient, refr
                         composable(Screen.Search.route) {
                             TuiSearchScreen(
                                 youtubeClient = youtubeClient,
+                                playerViewModel = viewModel,
                                 currentSongId = currentSong?.id,
                                 onSongClick = { song, list -> 
                                     viewModel.playSong(song, list)
@@ -133,7 +136,7 @@ fun DergPlayerApp(viewModel: PlayerViewModel, youtubeClient: YouTubeClient, refr
                                 nextTitle = remainingQueue.firstOrNull()?.title ?: "None",
                                 volume = volume,
                                 systemStatus = systemStatus,
-                                visualizerMagnitudes = visualizerMagnitudes,
+                                visualizerMagnitudes = visualizerMagnitudesProvider,
                                 onPrevious = onPrevious,
                                 onTogglePlay = onTogglePlay,
                                 onNext = onNext,

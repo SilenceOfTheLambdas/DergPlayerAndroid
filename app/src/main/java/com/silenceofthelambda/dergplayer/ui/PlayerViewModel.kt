@@ -122,6 +122,15 @@ class PlayerViewModel(
 
     private var positionUpdateJob: Job? = null
 
+    private val _dominantColorCache = mutableMapOf<String, Color>()
+    private val _asciiArtCache = mutableMapOf<String, String>()
+
+    private var visualizerThread: android.os.HandlerThread? = null
+    private var visualizerHandler: android.os.Handler? = null
+    private var binCache: List<Pair<Int, Int>>? = null
+    private var lastN = -1
+    private var lastVisualizerUpdate = 0L
+
     private val playerListener = object : MediaController.Listener, Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             _isPlaying.value = isPlaying
@@ -147,6 +156,29 @@ class PlayerViewModel(
                 _duration.value = controller?.duration ?: 0L
             } else if (playbackState == Player.STATE_ENDED) {
                 onSongEnded()
+            }
+        }
+
+        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED) return
+            
+            mediaItem?.let { item ->
+                val songId = item.mediaId
+                val song = _queue.value.find { it.id == songId }
+                if (song != null) {
+                    if (_currentSong.value?.id != songId) {
+                        android.util.Log.d("PlayerViewModel", "Transitioning to song: ${song.title}")
+                        _currentSong.value = song
+                        updateRemainingQueue()
+                        
+                        // Trigger UI metadata update (from cache if ready)
+                        viewModelScope.launch {
+                            fetchSongMetadataUI(song)
+                        }
+                    }
+                    // Always try to prefetch the next one
+                    prefetchNextSong()
+                }
             }
         }
 
@@ -189,6 +221,7 @@ class PlayerViewModel(
                 _duration.value = ctrl.duration
                 _playbackPosition.value = ctrl.currentPosition
                 _volume.value = ctrl.volume
+                ctrl.repeatMode = _repeatMode.value
                 
                 if (ctrl.isPlaying) {
                     startPositionUpdates()
@@ -257,15 +290,150 @@ class PlayerViewModel(
         return currentIdx < _queue.value.size - 1
     }
 
+    private fun getNextSong(): Song? {
+        val currentList = _queue.value
+        val currentIndex = currentList.indexOfFirst { it.id == _currentSong.value?.id }
+
+        return if (currentIndex != -1 && currentIndex < currentList.size - 1) {
+            currentList[currentIndex + 1]
+        } else if (_repeatMode.value == Player.REPEAT_MODE_ALL && currentList.isNotEmpty()) {
+            currentList.first()
+        } else {
+            null
+        }
+    }
+
+    private fun prefetchNextSong() {
+        val nextSong = getNextSong()
+        if (nextSong == null) {
+            controller?.let { ctrl ->
+                if (ctrl.mediaItemCount > 1) {
+                    ctrl.removeMediaItems(1, ctrl.mediaItemCount)
+                }
+            }
+            return
+        }
+        prefetchSong(nextSong)
+        
+        // Add to MediaController playlist for gapless playback
+        viewModelScope.launch {
+            val info = extractor.getFullStreamInfo(nextSong.id)
+            if (info.streamUrl != null) {
+                controller?.let { ctrl ->
+                    // Clean up previous tracks from player playlist
+                    val currentIdx = ctrl.currentMediaItemIndex
+                    if (currentIdx > 0) {
+                        ctrl.removeMediaItems(0, currentIdx)
+                    }
+
+                    // Only add if not already there as the next item
+                    var alreadyInPlaylist = false
+                    if (ctrl.mediaItemCount > 1) {
+                        val nextItem = ctrl.getMediaItemAt(1)
+                        if (nextItem.mediaId == nextSong.id) {
+                            alreadyInPlaylist = true
+                        }
+                    }
+                    
+                    if (!alreadyInPlaylist) {
+                        // Clear any items after the current one and add the new next item
+                        if (ctrl.mediaItemCount > 1) {
+                            ctrl.removeMediaItems(1, ctrl.mediaItemCount)
+                        }
+                        
+                        val mediaMetadata = MediaMetadata.Builder()
+                            .setTitle(nextSong.title)
+                            .setArtist(nextSong.artist)
+                            .setArtworkUri(Uri.parse(nextSong.thumbnail))
+                            .build()
+                        val mediaItem = MediaItem.Builder()
+                            .setMediaId(nextSong.id)
+                            .setUri(info.streamUrl)
+                            .setMediaMetadata(mediaMetadata)
+                            .build()
+                        
+                        ctrl.addMediaItem(mediaItem)
+                        android.util.Log.d("PlayerViewModel", "Added next song to playlist: ${nextSong.title}")
+                    }
+                }
+            }
+        }
+    }
+
+    fun prefetchSong(song: Song) {
+        viewModelScope.launch {
+            android.util.Log.d("PlayerViewModel", "Prefetching song: ${song.title}")
+            // Pre-calculate UI metadata
+            launch { fetchSongMetadataUI(song, updateState = false) }
+            // Pre-fetch stream info into StreamExtractor's cache
+            extractor.getFullStreamInfo(song.id)
+        }
+    }
+
+    private suspend fun processRecommendations(song: Song, info: StreamExtractor.FullStreamInfo) {
+        // Prioritize Radio playlist for Smart Shuffle if enabled
+        val recommendations = if (_shuffleMode.value == ShuffleMode.SMART) {
+            val radioSongs = youtubeClient.getRelatedVideosFromRadio(song.id)
+            if (radioSongs.isNotEmpty()) {
+                youtubeClient.filterMusic(radioSongs)
+            } else {
+                // Fallback to related songs from extractor, but filter them too
+                youtubeClient.filterMusic(info.relatedSongs)
+            }
+        } else {
+            info.relatedSongs
+        }
+
+        if (_currentSong.value?.id != song.id) return
+
+        _relatedSongs.value = recommendations
+
+        // Add related songs to queue if smart shuffle is enabled
+        if (_shuffleMode.value == ShuffleMode.SMART) {
+            // Read latest queue state after potential suspension
+            val currentIds = _queue.value.map { it.id }.toSet()
+            // Limit to 3 recommendations
+            val newRelated = recommendations.filterNot { it.id in currentIds }.take(3)
+            
+            if (newRelated.isNotEmpty()) {
+                val currentQueue = _queue.value.toMutableList()
+                val currentIdx = currentQueue.indexOfFirst { it.id == song.id }
+                val remainingIdx = if (currentIdx != -1) currentIdx + 1 else currentQueue.size
+                val remainingCount = currentQueue.size - remainingIdx
+
+                if (remainingCount > 0) {
+                    // Insert at regular intervals within the remaining queue
+                    val interval = (remainingCount / newRelated.size).coerceAtLeast(1)
+                    newRelated.forEachIndexed { i, relSong ->
+                        val insertPos = (remainingIdx + (i + 1) * interval + i).coerceAtMost(currentQueue.size)
+                        currentQueue.add(insertPos, relSong)
+                    }
+                } else {
+                    // Append if remaining queue is empty
+                    currentQueue.addAll(newRelated)
+                }
+                _queue.value = currentQueue
+                updateRemainingQueue()
+                showStatus("SMART: +${newRelated.size} SONGS")
+                prefetchNextSong()
+            }
+        }
+    }
+
     fun playSong(song: Song, contextQueue: List<Song> = emptyList()) {
         viewModelScope.launch {
             _currentSong.value = song
             _relatedSongs.value = emptyList()
             _isLiked.value = false
 
+            // Parallelize non-essential tasks
             launch {
                 val rating = youtubeClient.getVideoRating(song.id)
                 _isLiked.value = rating == "like"
+            }
+
+            launch {
+                fetchSongMetadataUI(song)
             }
 
             // Set queue if provided, otherwise maintain current or add song
@@ -286,53 +454,11 @@ class PlayerViewModel(
                     _originalQueue.value = _originalQueue.value + song
                 }
             }
+            updateRemainingQueue()
 
-            song.thumbnail?.let { updateDominantColor(it) }
-            
+            // Fetch stream info (essential for playback)
             val info = extractor.getFullStreamInfo(song.id)
-            
-            // Prioritize Radio playlist for Smart Shuffle if enabled
-            val recommendations = if (_shuffleMode.value == ShuffleMode.SMART) {
-                val radioSongs = youtubeClient.getRelatedVideosFromRadio(song.id)
-                if (radioSongs.isNotEmpty()) {
-                    youtubeClient.filterMusic(radioSongs)
-                } else {
-                    // Fallback to related songs from extractor, but filter them too
-                    youtubeClient.filterMusic(info.relatedSongs)
-                }
-            } else {
-                info.relatedSongs
-            }
-            
-            _relatedSongs.value = recommendations
-            
-            // Add related songs to queue if smart shuffle is enabled
-            if (_shuffleMode.value == ShuffleMode.SMART) {
-                val currentIds = _queue.value.map { it.id }.toSet()
-                // Limit to 3 recommendations as requested
-                val newRelated = recommendations.filterNot { it.id in currentIds }.take(3)
-                if (newRelated.isNotEmpty()) {
-                    val currentQueue = _queue.value.toMutableList()
-                    val currentIdx = currentQueue.indexOfFirst { it.id == song.id }
-                    val remainingIdx = if (currentIdx != -1) currentIdx + 1 else currentQueue.size
-                    val remainingCount = currentQueue.size - remainingIdx
-                    
-                    if (remainingCount > 0) {
-                        // Insert at regular intervals within the remaining queue
-                        val interval = (remainingCount / newRelated.size).coerceAtLeast(1)
-                        newRelated.forEachIndexed { i, relSong ->
-                            val insertPos = (remainingIdx + (i + 1) * interval + i).coerceAtMost(currentQueue.size)
-                            currentQueue.add(insertPos, relSong)
-                        }
-                    } else {
-                        // Append if remaining queue is empty
-                        currentQueue.addAll(newRelated)
-                    }
-                    _queue.value = currentQueue
-                    showStatus("SMART: +${newRelated.size} SONGS")
-                }
-            }
-            
+
             if (info.streamUrl != null) {
                 val mediaMetadata = MediaMetadata.Builder()
                     .setTitle(song.title)
@@ -350,10 +476,13 @@ class PlayerViewModel(
                     it.prepare()
                     it.play()
                 }
+
+                // Start background tasks after playback has started
+                launch { processRecommendations(song, info) }
+                prefetchNextSong()
             } else {
                 android.util.Log.e("PlayerViewModel", "Could not get stream URL for song ${song.id}")
             }
-            updateRemainingQueue()
         }
     }
 
@@ -396,6 +525,7 @@ class PlayerViewModel(
             _originalQueue.value = _originalQueue.value + song
         }
         updateRemainingQueue()
+        prefetchNextSong()
     }
 
     fun seekTo(position: Long) {
@@ -413,6 +543,13 @@ class PlayerViewModel(
 
     fun skipToNext() {
         showStatus("SKIPPING NEXT")
+        controller?.let { ctrl ->
+            if (ctrl.mediaItemCount > 1 && ctrl.hasNextMediaItem()) {
+                ctrl.seekToNext()
+                return
+            }
+        }
+        
         val currentList = _queue.value
         val currentIndex = currentList.indexOfFirst { it.id == _currentSong.value?.id }
         
@@ -464,8 +601,16 @@ class PlayerViewModel(
         } else if (newMode == ShuffleMode.OFF) {
             // Restore original order
             _queue.value = _originalQueue.value
+        } else if (newMode == ShuffleMode.SMART) {
+            _currentSong.value?.let { current ->
+                viewModelScope.launch {
+                    val info = extractor.getFullStreamInfo(current.id)
+                    processRecommendations(current, info)
+                }
+            }
         }
         updateRemainingQueue()
+        prefetchNextSong()
     }
 
     fun toggleRepeat() {
@@ -475,6 +620,7 @@ class PlayerViewModel(
             else -> Player.REPEAT_MODE_OFF
         }
         _repeatMode.value = newMode
+        controller?.repeatMode = newMode
 
         val modeText = when(newMode) {
             Player.REPEAT_MODE_ONE -> "ONE"
@@ -482,6 +628,7 @@ class PlayerViewModel(
             else -> "OFF"
         }
         showStatus("REPEAT: $modeText")
+        prefetchNextSong()
     }
 
     fun toggleLike() {
@@ -500,6 +647,7 @@ class PlayerViewModel(
         _queue.value = _queue.value.filter { it.id != songId }
         _originalQueue.value = _originalQueue.value.filter { it.id != songId }
         updateRemainingQueue()
+        prefetchNextSong()
     }
 
     fun clearQueue() {
@@ -508,7 +656,17 @@ class PlayerViewModel(
         updateRemainingQueue()
     }
 
-    private suspend fun updateDominantColor(imageUrl: String) {
+    private suspend fun fetchSongMetadataUI(song: Song, updateState: Boolean = true) {
+        if (_asciiArtCache.containsKey(song.id) && _dominantColorCache.containsKey(song.id)) {
+            if (updateState) {
+                _asciiArt.value = _asciiArtCache[song.id] ?: ""
+                _dominantColor.value = _dominantColorCache[song.id] ?: Color(0xFF00FF41)
+                if (_tuiSchemeName.value == "Dynamic") updateTuiColors()
+            }
+            return
+        }
+
+        val imageUrl = song.thumbnail ?: return
         withContext(Dispatchers.IO) {
             val loader = ImageLoader(getApplication())
             val request = ImageRequest.Builder(getApplication())
@@ -520,15 +678,23 @@ class PlayerViewModel(
             if (result is SuccessResult) {
                 val bitmap = (result.drawable as BitmapDrawable).bitmap
                 
-                // Generate ASCII art
-                val ascii = TuiUtils.bitmapToAscii(bitmap, 64, 40)
-                _asciiArt.value = ascii
+                // Offload CPU intensive tasks to Default dispatcher
+                val (ascii, color) = withContext(Dispatchers.Default) {
+                    val asciiArt = TuiUtils.bitmapToAscii(bitmap, 64, 40)
+                    val palette = Palette.from(bitmap).generate()
+                    val colorInt = palette.getVibrantColor(palette.getMutedColor(0xFF121212.toInt()))
+                    asciiArt to Color(colorInt)
+                }
 
-                val palette = Palette.from(bitmap).generate()
-                val color = palette.getVibrantColor(palette.getMutedColor(0xFF121212.toInt()))
-                _dominantColor.value = Color(color)
-                if (_tuiSchemeName.value == "Dynamic") {
-                    updateTuiColors()
+                _asciiArtCache[song.id] = ascii
+                _dominantColorCache[song.id] = color
+
+                if (updateState) {
+                    _asciiArt.value = ascii
+                    _dominantColor.value = color
+                    if (_tuiSchemeName.value == "Dynamic") {
+                        updateTuiColors()
+                    }
                 }
             }
         }
@@ -588,47 +754,59 @@ class PlayerViewModel(
             }
 
             val sessionId = currentAudioSessionId
-            if (sessionId == 0) {
-                android.util.Log.w("PlayerViewModel", "Visualizer sessionId is 0")
+            if (sessionId <= 0) {
+                android.util.Log.w("PlayerViewModel", "Visualizer sessionId is $sessionId")
                 return 
             }
             
-            if (visualizer == null || visualizerSessionId != sessionId) {
-                try {
-                    android.util.Log.d("PlayerViewModel", "Initializing visualizer for session $sessionId")
-                    visualizer?.release()
-                    visualizer = Visualizer(sessionId).apply {
-                        captureSize = Visualizer.getCaptureSizeRange()[1]
-                        setDataCaptureListener(object : Visualizer.OnDataCaptureListener {
-                            override fun onWaveFormDataCapture(v: Visualizer?, waveform: ByteArray?, samplingRate: Int) {}
+            if (visualizerThread == null) {
+                visualizerThread = android.os.HandlerThread("VisualizerThread").apply { start() }
+                visualizerHandler = android.os.Handler(visualizerThread!!.looper)
+            }
 
-                            override fun onFftDataCapture(v: Visualizer?, fft: ByteArray?, samplingRate: Int) {
-                                if (fft != null) {
-                                    _visualizerMagnitudes.value = calculateMagnitudes(fft)
+            visualizerHandler?.post {
+                if (visualizer == null || visualizerSessionId != sessionId) {
+                    try {
+                        android.util.Log.d("PlayerViewModel", "Initializing visualizer for session $sessionId")
+                        visualizer?.release()
+                        visualizer = Visualizer(sessionId).apply {
+                            captureSize = Visualizer.getCaptureSizeRange()[1]
+                            setDataCaptureListener(object : Visualizer.OnDataCaptureListener {
+                                override fun onWaveFormDataCapture(v: Visualizer?, waveform: ByteArray?, samplingRate: Int) {}
+
+                                override fun onFftDataCapture(v: Visualizer?, fft: ByteArray?, samplingRate: Int) {
+                                    if (fft != null) {
+                                        val now = System.currentTimeMillis()
+                                        if (now - lastVisualizerUpdate >= 33) { // ~30 FPS
+                                            _visualizerMagnitudes.value = calculateMagnitudes(fft)
+                                            lastVisualizerUpdate = now
+                                        }
+                                    }
                                 }
-                            }
-                        }, Visualizer.getMaxCaptureRate(), false, true)
-                        this.enabled = true
+                            }, Visualizer.getMaxCaptureRate(), false, true)
+                            this.enabled = true
+                        }
+                        visualizerSessionId = sessionId
+                        android.util.Log.d("PlayerViewModel", "Visualizer initialized successfully")
+                    } catch (e: Exception) {
+                        android.util.Log.e("PlayerViewModel", "Error initializing visualizer", e)
                     }
-                    visualizerSessionId = sessionId
-                    android.util.Log.d("PlayerViewModel", "Visualizer initialized successfully")
-                } catch (e: Exception) {
-                    android.util.Log.e("PlayerViewModel", "Error initializing visualizer", e)
-                }
-            } else {
-                try {
-                    visualizer?.enabled = true
-                } catch (e: Exception) {
-                    android.util.Log.e("PlayerViewModel", "Error enabling visualizer", e)
-                    // If it failed to enable, maybe it was released or permission issue, try re-init next time
-                    visualizer = null
+                } else {
+                    try {
+                        visualizer?.enabled = true
+                    } catch (e: Exception) {
+                        android.util.Log.e("PlayerViewModel", "Error enabling visualizer", e)
+                        visualizer = null
+                    }
                 }
             }
         } else {
-            try {
-                visualizer?.enabled = false
-            } catch (e: Exception) {
-                // Ignore errors on disable
+            visualizerHandler?.post {
+                try {
+                    visualizer?.enabled = false
+                } catch (e: Exception) {
+                    // Ignore errors on disable
+                }
             }
             _visualizerMagnitudes.value = emptyList()
         }
@@ -636,26 +814,38 @@ class PlayerViewModel(
 
     private fun calculateMagnitudes(fft: ByteArray): List<Float> {
         val n = fft.size / 2
-        val magnitudes = mutableListOf<Float>()
-        val numBars = 80 // Increased from 64 for more detail
+        val numBars = 80 
+        
+        // Cache bin indices as they only depend on n and numBars
+        if (n != lastN || binCache == null || binCache!!.size != numBars) {
+            val bins = mutableListOf<Pair<Int, Int>>()
+            for (i in 0 until numBars) {
+                val startBin = Math.pow(n.toDouble(), (i.toDouble() / numBars)).toInt().coerceIn(1, n - 1)
+                val endBin = Math.pow(n.toDouble(), ((i + 1).toDouble() / numBars)).toInt().coerceIn(1, n - 1)
+                bins.add(startBin to endBin)
+            }
+            binCache = bins
+            lastN = n
+        }
+
+        val magnitudes = ArrayList<Float>(numBars)
+        val currentBins = binCache!!
 
         for (i in 0 until numBars) {
-            // Logarithmic distribution to cover more frequencies across the audible spectrum
-            val startBin = Math.pow(n.toDouble(), (i.toDouble() / numBars)).toInt().coerceIn(1, n - 1)
-            val endBin = Math.pow(n.toDouble(), ((i + 1).toDouble() / numBars)).toInt().coerceIn(1, n - 1)
-
+            val (startBin, endBin) = currentBins[i]
             var maxMag = 0f
-            // Use the maximum magnitude in the range for a more dynamic feel
+            
             for (j in startBin..endBin) {
                 val r = fft[2 * j].toInt()
                 val im = fft[2 * j + 1].toInt()
-                val mag = Math.hypot(r.toDouble(), im.toDouble()).toFloat()
+                // Fast magnitude approximation: |r| + |im|
+                val mag = (if (r < 0) -r else r).toFloat() + (if (im < 0) -im else im).toFloat()
                 if (mag > maxMag) maxMag = mag
             }
 
             // Normalize and scale. FFT values are signed bytes (-128 to 127).
-            // hypot(128, 128) is ~181. Using 100f as divisor for sensitivity.
-            val normalized = (maxMag / 100f).coerceIn(0f, 1f)
+            // Max |r| + |im| is ~254. Let's divide by 150 for decent sensitivity.
+            val normalized = (maxMag / 150f).coerceIn(0f, 1f)
             val scaledMag = Math.sqrt(normalized.toDouble()).toFloat()
             magnitudes.add(scaledMag)
         }
@@ -665,6 +855,7 @@ class PlayerViewModel(
     override fun onCleared() {
         super.onCleared()
         visualizer?.release()
+        visualizerThread?.quitSafely()
         controller?.removeListener(playerListener)
         controllerFuture?.let {
             MediaController.releaseFuture(it)

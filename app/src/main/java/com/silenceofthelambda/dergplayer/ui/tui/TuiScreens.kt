@@ -19,6 +19,8 @@ import androidx.compose.ui.unit.sp
 import com.silenceofthelambda.dergplayer.api.YouTubeClient
 import com.silenceofthelambda.dergplayer.model.Playlist
 import com.silenceofthelambda.dergplayer.model.Song
+import com.silenceofthelambda.dergplayer.ui.PlayerViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
@@ -134,6 +136,7 @@ fun TuiPlaylistsScreen(
 fun TuiPlaylistDetailScreen(
     playlistId: String,
     youtubeClient: YouTubeClient,
+    playerViewModel: PlayerViewModel,
     refreshTrigger: Int,
     currentSongId: String?,
     onSongClick: (Song, List<Song>) -> Unit,
@@ -146,8 +149,12 @@ fun TuiPlaylistDetailScreen(
     LaunchedEffect(playlistId, refreshTrigger) {
         isLoading = true
         songs.clear()
-        songs.addAll(youtubeClient.getPlaylistItems(playlistId))
+        val fetchedSongs = youtubeClient.getPlaylistItems(playlistId)
+        songs.addAll(fetchedSongs)
         isLoading = false
+        if (fetchedSongs.isNotEmpty()) {
+            playerViewModel.prefetchSong(fetchedSongs[0])
+        }
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
@@ -223,6 +230,7 @@ fun TuiPlaylistDetailScreen(
 @Composable
 fun TuiSearchScreen(
     youtubeClient: YouTubeClient,
+    playerViewModel: PlayerViewModel,
     currentSongId: String?,
     onSongClick: (Song, List<Song>) -> Unit,
     onAddToQueue: (Song) -> Unit,
@@ -231,7 +239,22 @@ fun TuiSearchScreen(
     var query by remember { mutableStateOf("") }
     val results = remember { mutableStateListOf<Song>() }
     var isLoading by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(query) {
+        if (query.length > 2) {
+            delay(500) // Debounce delay
+            isLoading = true
+            results.clear()
+            val searchResults = youtubeClient.search(query)
+            results.addAll(searchResults)
+            isLoading = false
+            if (searchResults.isNotEmpty()) {
+                playerViewModel.prefetchSong(searchResults[0])
+            }
+        } else {
+            results.clear()
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
         Row(
@@ -255,14 +278,6 @@ fun TuiSearchScreen(
             value = query,
             onValueChange = { 
                 query = it
-                if (it.length > 2) {
-                    scope.launch {
-                        isLoading = true
-                        results.clear()
-                        results.addAll(youtubeClient.search(it))
-                        isLoading = false
-                    }
-                }
             },
             placeholder = "SEARCH MUSIC...",
             modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
