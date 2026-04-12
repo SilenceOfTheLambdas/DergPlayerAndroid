@@ -8,6 +8,7 @@ import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import android.media.audiofx.Visualizer
 import android.net.Uri
+import android.os.Bundle
 import androidx.compose.ui.graphics.Color
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
@@ -16,8 +17,11 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
+import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionResult
 import androidx.media3.session.SessionToken
 import androidx.palette.graphics.Palette
+import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import coil.ImageLoader
 import coil.request.ImageRequest
@@ -26,6 +30,7 @@ import com.silenceofthelambda.dergplayer.api.YouTubeClient
 import com.silenceofthelambda.dergplayer.api.StreamExtractor
 import com.silenceofthelambda.dergplayer.model.Song
 import com.silenceofthelambda.dergplayer.model.ShuffleMode
+import com.silenceofthelambda.dergplayer.service.MediaPlaybackService
 import com.silenceofthelambda.dergplayer.ui.tui.AmberColors
 import com.silenceofthelambda.dergplayer.ui.tui.CyberpunkColors
 import com.silenceofthelambda.dergplayer.ui.tui.MatrixColors
@@ -117,7 +122,7 @@ class PlayerViewModel(
 
     private var positionUpdateJob: Job? = null
 
-    private val playerListener = object : Player.Listener {
+    private val playerListener = object : MediaController.Listener, Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             _isPlaying.value = isPlaying
             if (isPlaying) {
@@ -144,11 +149,25 @@ class PlayerViewModel(
                 onSongEnded()
             }
         }
+
+        override fun onCustomCommand(
+            controller: MediaController,
+            command: SessionCommand,
+            args: Bundle
+        ): ListenableFuture<SessionResult> {
+            when (command.customAction) {
+                MediaPlaybackService.COMMAND_SKIP_NEXT -> skipToNext()
+                MediaPlaybackService.COMMAND_SKIP_PREV -> skipToPrevious()
+            }
+            return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+        }
     }
 
     init {
-        val sessionToken = SessionToken(application, ComponentName(application, com.silenceofthelambda.dergplayer.service.MediaPlaybackService::class.java))
-        val future = MediaController.Builder(application, sessionToken).buildAsync()
+        val sessionToken = SessionToken(application, ComponentName(application, MediaPlaybackService::class.java))
+        val future = MediaController.Builder(application, sessionToken)
+            .setListener(playerListener)
+            .buildAsync()
         controllerFuture = future
         future.addListener({
             try {
