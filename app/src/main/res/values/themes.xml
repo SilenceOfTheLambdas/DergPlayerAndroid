@@ -1,0 +1,3 @@
+<resources>
+    <style name="Theme.DergPlayer" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>
