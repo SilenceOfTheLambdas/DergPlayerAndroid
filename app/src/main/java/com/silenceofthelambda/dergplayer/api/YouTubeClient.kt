@@ -43,11 +43,31 @@ class YouTubeClient(private val context: Context, private val credential: Google
                 )
             }.toMutableList()
 
+            // Fetch Liked Music system playlist info
+            var likedCount = 0L
+            var likedId = "LL"
+            val possibleLikedIds = listOf("VLLM", "LM", "LL")
+
+            for (id in possibleLikedIds) {
+                try {
+                    // Get the count from playlistItems
+                    val likedPlaylistResponse = youtube.playlistItems().list(listOf("id"))
+                        .setPlaylistId(id)
+                        .setMaxResults(1L)
+                        .execute()
+                    likedId = id
+                    likedCount = likedPlaylistResponse.pageInfo.totalResults.toLong()
+                    break
+                } catch (e: Exception) {
+                    // Try next ID
+                }
+            }
+
             // Add Liked Music system playlist
             playlists.add(0, Playlist(
-                id = "LM",
+                id = likedId,
                 title = "Liked Music",
-                count = 0,
+                count = likedCount,
                 thumbnail = "https://www.gstatic.com/youtube/media/ytm/images/p_liked_songs.png"
             ))
 
@@ -57,6 +77,64 @@ class YouTubeClient(private val context: Context, private val credential: Google
             emptyList()
         } catch (e: Exception) {
             e.printStackTrace()
+            emptyList()
+        }
+    }
+
+    suspend fun filterMusic(songs: List<Song>): List<Song> = withContext(Dispatchers.IO) {
+        if (songs.isEmpty()) return@withContext emptyList()
+        try {
+            // Get video details to check category
+            val videoIds = songs.map { it.id }
+            val response = youtube.videos().list(listOf("snippet"))
+                .setId(videoIds)
+                .execute()
+            
+            val musicVideoIds = response.items
+                .filter { it.snippet.categoryId == "10" } // 10 is Music
+                .map { it.id }
+                .toSet()
+            
+            songs.filter { it.id in musicVideoIds }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            songs // Return original if error to avoid losing all recommendations
+        }
+    }
+
+    suspend fun getRelatedVideosFromRadio(videoId: String): List<Song> = withContext(Dispatchers.IO) {
+        try {
+            // "RD" + videoId is the standard Mix/Radio playlist ID
+            val playlistId = "RD$videoId"
+            val response = youtube.playlistItems().list(listOf("snippet", "contentDetails"))
+                .setPlaylistId(playlistId)
+                .setMaxResults(25L)
+                .execute()
+
+            val videoIds = response.items.map { it.contentDetails.videoId }
+            if (videoIds.isEmpty()) return@withContext emptyList()
+
+            val videoDetailsResponse = youtube.videos().list(listOf("snippet", "contentDetails"))
+                .setId(videoIds)
+                .execute()
+
+            val videoDetails = videoDetailsResponse.items.associateBy { it.id }
+
+            response.items.mapNotNull { item ->
+                val vId = item.contentDetails.videoId
+                val details = videoDetails[vId] ?: return@mapNotNull null
+                Song(
+                    id = vId,
+                    title = item.snippet.title,
+                    artist = cleanArtist(details.snippet.channelTitle),
+                    duration = parseDuration(details.contentDetails.duration),
+                    thumbnail = item.snippet.thumbnails.default?.url,
+                    publishedAt = item.snippet.publishedAt.toString(),
+                    playlistTitle = "Radio"
+                )
+            }
+        } catch (e: Exception) {
+            // If RD playlist fails or is unsupported (can happen via API), return empty
             emptyList()
         }
     }
@@ -80,6 +158,12 @@ class YouTubeClient(private val context: Context, private val credential: Google
             response.items.mapNotNull { item ->
                 val vId = item.contentDetails.videoId
                 val details = videoDetails[vId] ?: return@mapNotNull null
+                
+                // If it's the Liked Videos playlist (LL), strictly filter for music (ID 10)
+                if (playlistId == "LL" && details.snippet.categoryId != "10") {
+                    return@mapNotNull null
+                }
+
                 Song(
                     id = vId,
                     title = item.snippet.title,

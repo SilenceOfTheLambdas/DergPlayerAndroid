@@ -38,8 +38,13 @@ class StreamExtractor {
             val relatedItems = streamInfo.relatedItems
             val relatedSongs = relatedItems.mapNotNull { item ->
                 if (item is StreamInfoItem) {
-                    // Filter out non-music content (e.g., videos > 10 mins)
-                    if (item.duration > 600) return@mapNotNull null
+                    // Filter out likely non-music content (e.g., videos > 10 mins)
+                    // and prioritize tracks that look like music (from Topic channels)
+                    val isLikelyMusic = item.uploaderName.endsWith("- Topic")
+                    val durationLimit = if (isLikelyMusic) 1200 else 600 // More lenient for official music
+                    
+                    if (item.duration > durationLimit) return@mapNotNull null
+                    if (item.duration <= 0) return@mapNotNull null // Filter out weird/live items if needed
                     
                     Song(
                         id = item.url.substringAfter("v=").substringBefore("&"),

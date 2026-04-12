@@ -6,7 +6,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,7 +51,8 @@ fun TuiTopBar(
 fun TuiPlaylistsScreen(
     youtubeClient: YouTubeClient,
     refreshTrigger: Int,
-    onPlaylistClick: (String) -> Unit
+    onPlaylistClick: (String) -> Unit,
+    onPlayPlaylist: (String) -> Unit
 ) {
     val playlists = remember { mutableStateListOf<Playlist>() }
     var isLoading by remember { mutableStateOf(false) }
@@ -62,26 +66,56 @@ fun TuiPlaylistsScreen(
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
+        TuiText(
+            text = "SYSTEM@DERGPLAYER:~/music/playlists$",
+            style = TuiTheme.typography.copy(fontSize = 12.sp, color = TuiTheme.colors.primary.copy(alpha = 0.8f)),
+            modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)
+        )
+
         if (isLoading) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 TuiLoadingIndicator()
             }
         } else {
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(1), // List style for TUI looks better
-                contentPadding = PaddingValues(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(top = 16.dp, bottom = 16.dp)
             ) {
-                items(playlists) { playlist ->
+                itemsIndexed(playlists) { index, playlist ->
                     TuiBorderBox(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { onPlaylistClick(playlist.id) }
+                            .clickable { onPlaylistClick(playlist.id) },
+                        title = String.format("%02d", index + 1)
                     ) {
-                        Column {
-                            TuiText(text = playlist.title, fontWeight = FontWeight.Bold)
-                            TuiText(text = "${playlist.count} tracks", style = TuiTheme.typography.copy(fontSize = 12.sp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                TuiText(text = playlist.title.uppercase(), fontWeight = FontWeight.Bold)
+                                TuiText(
+                                    text = "FILE: /lib/${playlist.id.take(8)}.pls",
+                                    style = TuiTheme.typography.copy(fontSize = 10.sp, color = TuiTheme.colors.primary.copy(alpha = 0.5f))
+                                )
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                TuiText(
+                                    text = "[ ${playlist.count} ]",
+                                    fontWeight = FontWeight.Bold
+                                )
+                                TuiText(
+                                    text = "ITEMS",
+                                    style = TuiTheme.typography.copy(fontSize = 9.sp, color = TuiTheme.colors.primary.copy(alpha = 0.5f))
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(16.dp))
+                            TuiButton(
+                                text = "PLAY",
+                                onClick = { onPlayPlaylist(playlist.id) }
+                            )
                         }
                     }
                 }
@@ -95,7 +129,9 @@ fun TuiPlaylistDetailScreen(
     playlistId: String,
     youtubeClient: YouTubeClient,
     refreshTrigger: Int,
+    currentSongId: String?,
     onSongClick: (Song, List<Song>) -> Unit,
+    onAddToQueue: (Song) -> Unit,
     onBack: () -> Unit
 ) {
     val songs = remember { mutableStateListOf<Song>() }
@@ -108,12 +144,23 @@ fun TuiPlaylistDetailScreen(
         isLoading = false
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        TuiText(
-            text = "< BACK",
-            modifier = Modifier.padding(16.dp).clickable { onBack() },
-            fontWeight = FontWeight.Bold
-        )
+    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TuiText(
+                text = "[ BACK ]",
+                modifier = Modifier.clickable { onBack() },
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            TuiText(
+                text = "DIRECTORY: /playlists/${playlistId.take(8)}",
+                style = TuiTheme.typography.copy(fontSize = 11.sp, color = TuiTheme.colors.primary.copy(alpha = 0.7f)),
+                modifier = Modifier.weight(1f)
+            )
+        }
         
         if (isLoading) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -121,25 +168,44 @@ fun TuiPlaylistDetailScreen(
             }
         } else {
             LazyColumn(
-                contentPadding = PaddingValues(8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(top = 16.dp, bottom = 16.dp)
             ) {
-                items(songs) { song ->
+                itemsIndexed(songs) { index, song ->
                     TuiBorderBox(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { onSongClick(song, songs.toList()) }
+                            .clickable { onSongClick(song, songs.toList()) },
+                        title = String.format("%03d", index + 1)
                     ) {
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                TuiText(text = song.title, fontWeight = FontWeight.Bold)
-                                TuiText(text = song.artist, style = TuiTheme.typography.copy(fontSize = 12.sp))
+                                TuiText(text = song.title.uppercase(), fontWeight = FontWeight.Bold, maxLines = 1)
+                                TuiText(
+                                    text = "BY: ${song.artist.uppercase()}", 
+                                    style = TuiTheme.typography.copy(fontSize = 10.sp, color = TuiTheme.colors.primary.copy(alpha = 0.6f)),
+                                    maxLines = 1
+                                )
                             }
-                            TuiText(text = song.duration)
+                            if (song.id != currentSongId) {
+                                Spacer(modifier = Modifier.width(8.dp))
+                                TuiButton(
+                                    text = "PLAY",
+                                    onClick = { onSongClick(song, songs.toList()) }
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                TuiButton(
+                                    text = "QUEU",
+                                    onClick = { onAddToQueue(song) }
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            TuiText(text = song.duration, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -151,7 +217,9 @@ fun TuiPlaylistDetailScreen(
 @Composable
 fun TuiSearchScreen(
     youtubeClient: YouTubeClient,
+    currentSongId: String?,
     onSongClick: (Song, List<Song>) -> Unit,
+    onAddToQueue: (Song) -> Unit,
     onBack: () -> Unit
 ) {
     var query by remember { mutableStateOf("") }
@@ -159,12 +227,23 @@ fun TuiSearchScreen(
     var isLoading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        TuiText(
-            text = "< BACK",
-            modifier = Modifier.padding(16.dp).clickable { onBack() },
-            fontWeight = FontWeight.Bold
-        )
+    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TuiText(
+                text = "[ BACK ]",
+                modifier = Modifier.clickable { onBack() },
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            TuiText(
+                text = "QUERY: ${if (query.isEmpty()) "*" else query.uppercase()}",
+                style = TuiTheme.typography.copy(fontSize = 11.sp, color = TuiTheme.colors.primary.copy(alpha = 0.7f)),
+                modifier = Modifier.weight(1f)
+            )
+        }
 
         TuiTextField(
             value = query,
@@ -180,7 +259,7 @@ fun TuiSearchScreen(
                 }
             },
             placeholder = "SEARCH MUSIC...",
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
         )
 
         if (isLoading) {
@@ -189,25 +268,44 @@ fun TuiSearchScreen(
             }
         } else {
             LazyColumn(
-                contentPadding = PaddingValues(8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(top = 16.dp, bottom = 16.dp)
             ) {
-                items(results) { song ->
+                itemsIndexed(results) { index, song ->
                     TuiBorderBox(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { onSongClick(song, results.toList()) }
+                            .clickable { onSongClick(song, results.toList()) },
+                        title = String.format("%03d", index + 1)
                     ) {
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                TuiText(text = song.title, fontWeight = FontWeight.Bold)
-                                TuiText(text = song.artist, style = TuiTheme.typography.copy(fontSize = 12.sp))
+                                TuiText(text = song.title.uppercase(), fontWeight = FontWeight.Bold, maxLines = 1)
+                                TuiText(
+                                    text = "BY: ${song.artist.uppercase()}", 
+                                    style = TuiTheme.typography.copy(fontSize = 10.sp, color = TuiTheme.colors.primary.copy(alpha = 0.6f)),
+                                    maxLines = 1
+                                )
                             }
-                            TuiText(text = song.duration)
+                            if (song.id != currentSongId) {
+                                Spacer(modifier = Modifier.width(8.dp))
+                                TuiButton(
+                                    text = "PLAY",
+                                    onClick = { onSongClick(song, results.toList()) }
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                TuiButton(
+                                    text = "QUEU",
+                                    onClick = { onAddToQueue(song) }
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            TuiText(text = song.duration, fontWeight = FontWeight.Bold)
                         }
                     }
                 }

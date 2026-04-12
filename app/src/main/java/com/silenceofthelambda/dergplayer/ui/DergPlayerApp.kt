@@ -62,6 +62,10 @@ fun DergPlayerApp(viewModel: PlayerViewModel, youtubeClient: YouTubeClient, refr
                                 refreshTrigger = refreshTrigger,
                                 onPlaylistClick = { playlistId ->
                                     navController.navigate(Screen.PlaylistDetail.createRoute(playlistId))
+                                },
+                                onPlayPlaylist = { playlistId ->
+                                    viewModel.playPlaylist(playlistId)
+                                    navController.navigate(Screen.Player.route)
                                 }
                             )
                         }
@@ -71,20 +75,24 @@ fun DergPlayerApp(viewModel: PlayerViewModel, youtubeClient: YouTubeClient, refr
                                 playlistId = playlistId,
                                 youtubeClient = youtubeClient,
                                 refreshTrigger = refreshTrigger,
+                                currentSongId = currentSong?.id,
                                 onSongClick = { song, list -> 
                                     viewModel.playSong(song, list)
                                     navController.navigate(Screen.Player.route)
                                 },
+                                onAddToQueue = { viewModel.addToQueue(it) },
                                 onBack = { navController.popBackStack() }
                             )
                         }
                         composable(Screen.Search.route) {
                             TuiSearchScreen(
                                 youtubeClient = youtubeClient,
+                                currentSongId = currentSong?.id,
                                 onSongClick = { song, list -> 
                                     viewModel.playSong(song, list)
                                     navController.navigate(Screen.Player.route)
                                 },
+                                onAddToQueue = { viewModel.addToQueue(it) },
                                 onBack = { navController.popBackStack() }
                             )
                         }

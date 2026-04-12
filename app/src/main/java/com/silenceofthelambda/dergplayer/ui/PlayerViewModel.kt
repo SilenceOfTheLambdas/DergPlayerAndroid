@@ -234,13 +234,30 @@ class PlayerViewModel(
             song.thumbnail?.let { updateDominantColor(it) }
             
             val info = extractor.getFullStreamInfo(song.id)
-            _relatedSongs.value = info.relatedSongs
+            
+            // Prioritize Radio playlist for Smart Shuffle if enabled
+            val recommendations = if (_shuffleMode.value == ShuffleMode.SMART) {
+                val radioSongs = youtubeClient.getRelatedVideosFromRadio(song.id)
+                if (radioSongs.isNotEmpty()) {
+                    youtubeClient.filterMusic(radioSongs)
+                } else {
+                    // Fallback to related songs from extractor, but filter them too
+                    youtubeClient.filterMusic(info.relatedSongs)
+                }
+            } else {
+                info.relatedSongs
+            }
+            
+            _relatedSongs.value = recommendations
             
             // Add related songs to queue if smart shuffle is enabled
             if (_shuffleMode.value == ShuffleMode.SMART) {
                 val currentIds = _queue.value.map { it.id }.toSet()
-                val newRelated = info.relatedSongs.filterNot { it.id in currentIds }
-                _queue.value = _queue.value + newRelated
+                val newRelated = recommendations.filterNot { it.id in currentIds }
+                if (newRelated.isNotEmpty()) {
+                    _queue.value = _queue.value + newRelated
+                    showStatus("SMART: +${newRelated.size} SONGS")
+                }
             }
             
             if (info.streamUrl != null) {
@@ -257,6 +274,31 @@ class PlayerViewModel(
             }
             updateRemainingQueue()
         }
+    }
+
+    fun playPlaylist(playlistId: String) {
+        viewModelScope.launch {
+            showStatus("LOADING PLAYLIST...")
+            val songs = youtubeClient.getPlaylistItems(playlistId)
+            if (songs.isNotEmpty()) {
+                playSong(songs.first(), songs)
+            } else {
+                showStatus("EMPTY PLAYLIST")
+            }
+        }
+    }
+
+    fun addToQueue(song: Song) {
+        if (!_queue.value.any { it.id == song.id }) {
+            _queue.value = _queue.value + song
+            showStatus("ADDED TO QUEUE")
+        } else {
+            showStatus("ALREADY IN QUEUE")
+        }
+        if (!_originalQueue.value.any { it.id == song.id }) {
+            _originalQueue.value = _originalQueue.value + song
+        }
+        updateRemainingQueue()
     }
 
     fun seekTo(position: Long) {
