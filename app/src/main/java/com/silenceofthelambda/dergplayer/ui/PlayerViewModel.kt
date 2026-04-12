@@ -1,9 +1,13 @@
 package com.silenceofthelambda.dergplayer.ui
 
 import android.app.Application
+import android.Manifest
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
+import android.media.audiofx.Visualizer
 import androidx.compose.ui.graphics.Color
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.MediaItem
@@ -98,6 +102,12 @@ class PlayerViewModel(
     private val _systemStatus = MutableStateFlow("")
     val systemStatus: StateFlow<String> = _systemStatus
 
+    private val _visualizerMagnitudes = MutableStateFlow<List<Float>>(emptyList())
+    val visualizerMagnitudes: StateFlow<List<Float>> = _visualizerMagnitudes
+
+    private var visualizer: Visualizer? = null
+    private var visualizerSessionId = 0
+    private var currentAudioSessionId = 0
     private var statusJob: Job? = null
 
     private var positionUpdateJob: Job? = null
@@ -108,8 +118,18 @@ class PlayerViewModel(
                 _isPlaying.value = isPlaying
                 if (isPlaying) {
                     startPositionUpdates()
+                    updateVisualizer(true)
                 } else {
                     stopPositionUpdates()
+                    updateVisualizer(false)
+                }
+            }
+
+            override fun onAudioSessionIdChanged(audioSessionId: Int) {
+                android.util.Log.d("PlayerViewModel", "Audio session ID changed: $audioSessionId")
+                currentAudioSessionId = audioSessionId
+                if (_isPlaying.value) {
+                    updateVisualizer(true)
                 }
             }
 
@@ -121,6 +141,7 @@ class PlayerViewModel(
                 }
             }
         })
+        currentAudioSessionId = _player.audioSessionId
     }
 
     private fun startPositionUpdates() {
@@ -128,6 +149,15 @@ class PlayerViewModel(
         positionUpdateJob = viewModelScope.launch {
             while (true) {
                 _playbackPosition.value = _player.currentPosition
+                // Periodically try to re-init visualizer if it should be enabled but failed (e.g. permission was missing)
+                try {
+                    val isVisActive = try { visualizer?.enabled ?: false } catch (e: Exception) { false }
+                    if (_isPlaying.value && !isVisActive) {
+                        updateVisualizer(true)
+                    }
+                } catch (e: Exception) {
+                    // Ignore
+                }
                 delay(1000)
             }
         }
@@ -406,8 +436,89 @@ class PlayerViewModel(
         }
     }
 
+    private fun updateVisualizer(enabled: Boolean) {
+        if (enabled) {
+            // Check for RECORD_AUDIO permission
+            if (ContextCompat.checkSelfPermission(
+                    getApplication(),
+                    Manifest.permission.RECORD_AUDIO
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                android.util.Log.w("PlayerViewModel", "Visualizer disabled: RECORD_AUDIO permission not granted")
+                return
+            }
+
+            val sessionId = if (currentAudioSessionId == 0) _player.audioSessionId else currentAudioSessionId
+            if (sessionId == 0) {
+                android.util.Log.w("PlayerViewModel", "Visualizer sessionId is 0")
+                return 
+            }
+            
+            if (visualizer == null || visualizerSessionId != sessionId) {
+                try {
+                    android.util.Log.d("PlayerViewModel", "Initializing visualizer for session $sessionId")
+                    visualizer?.release()
+                    visualizer = Visualizer(sessionId).apply {
+                        captureSize = Visualizer.getCaptureSizeRange()[1]
+                        setDataCaptureListener(object : Visualizer.OnDataCaptureListener {
+                            override fun onWaveFormDataCapture(v: Visualizer?, waveform: ByteArray?, samplingRate: Int) {}
+
+                            override fun onFftDataCapture(v: Visualizer?, fft: ByteArray?, samplingRate: Int) {
+                                if (fft != null) {
+                                    _visualizerMagnitudes.value = calculateMagnitudes(fft)
+                                }
+                            }
+                        }, Visualizer.getMaxCaptureRate(), false, true)
+                        this.enabled = true
+                    }
+                    visualizerSessionId = sessionId
+                    android.util.Log.d("PlayerViewModel", "Visualizer initialized successfully")
+                } catch (e: Exception) {
+                    android.util.Log.e("PlayerViewModel", "Error initializing visualizer", e)
+                }
+            } else {
+                try {
+                    visualizer?.enabled = true
+                } catch (e: Exception) {
+                    android.util.Log.e("PlayerViewModel", "Error enabling visualizer", e)
+                    // If it failed to enable, maybe it was released or permission issue, try re-init next time
+                    visualizer = null
+                }
+            }
+        } else {
+            try {
+                visualizer?.enabled = false
+            } catch (e: Exception) {
+                // Ignore errors on disable
+            }
+            _visualizerMagnitudes.value = emptyList()
+        }
+    }
+
+    private fun calculateMagnitudes(fft: ByteArray): List<Float> {
+        // FFT format: [real DC, real Nyquist, real bin1, imag bin1, real bin2, imag bin2, ...]
+        val n = (fft.size / 2).coerceAtMost(64)
+        val magnitudes = mutableListOf<Float>()
+        
+        for (i in 1 until n) { // Skip DC and Nyquist for visual simplicity
+            val r = fft[2 * i].toInt()
+            val im = fft[2 * i + 1].toInt()
+            val mag = Math.hypot(r.toDouble(), im.toDouble()).toFloat()
+            
+            // Normalize and scale. FFT values are signed bytes (-128 to 127).
+            // hypot(128, 128) is ~181.
+            // Using a more aggressive scaling and sqrt for better visual response.
+            val normalized = (mag / 100f).coerceIn(0f, 1f)
+            val scaledMag = Math.sqrt(normalized.toDouble()).toFloat()
+            
+            magnitudes.add(scaledMag)
+        }
+        return magnitudes
+    }
+
     override fun onCleared() {
         super.onCleared()
+        visualizer?.release()
         _player.release()
     }
 }

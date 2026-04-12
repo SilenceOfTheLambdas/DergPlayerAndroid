@@ -33,6 +33,7 @@ fun DergPlayerApp(viewModel: PlayerViewModel, youtubeClient: YouTubeClient, refr
     val remainingQueue by viewModel.remainingQueue.collectAsState()
     val volume by viewModel.volume.collectAsState()
     val systemStatus by viewModel.systemStatus.collectAsState()
+    val visualizerMagnitudes by viewModel.visualizerMagnitudes.collectAsState()
 
     TuiTheme(colors = tuiColors) {
         Box(modifier = Modifier.fillMaxSize().background(TuiTheme.colors.background)) {
@@ -103,6 +104,7 @@ fun DergPlayerApp(viewModel: PlayerViewModel, youtubeClient: YouTubeClient, refr
                                 nextTitle = remainingQueue.firstOrNull()?.title ?: "None",
                                 volume = volume,
                                 systemStatus = systemStatus,
+                                visualizerMagnitudes = visualizerMagnitudes,
                                 onPrevious = { viewModel.skipToPrevious() },
                                 onTogglePlay = { viewModel.togglePlayPause() },
                                 onNext = { viewModel.skipToNext() },

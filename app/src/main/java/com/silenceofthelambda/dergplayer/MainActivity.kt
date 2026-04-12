@@ -1,5 +1,6 @@
 package com.silenceofthelambda.dergplayer
 
+import android.Manifest
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -26,6 +27,14 @@ class MainActivity : ComponentActivity() {
             var isAuthorized by remember { mutableStateOf(authManager.isAuthorized()) }
             var refreshTrigger by remember { mutableIntStateOf(0) }
             
+            val permissionLauncher = rememberLauncherForActivityResult(
+                ActivityResultContracts.RequestPermission()
+            ) { }
+
+            LaunchedEffect(Unit) {
+                permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            }
+
             val launcher = rememberLauncherForActivityResult(
                 contract = ActivityResultContracts.StartActivityForResult()
             ) { result ->

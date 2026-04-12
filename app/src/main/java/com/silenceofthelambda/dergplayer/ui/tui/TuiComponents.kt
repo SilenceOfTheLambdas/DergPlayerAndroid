@@ -221,50 +221,39 @@ fun TuiLoadingIndicator(modifier: Modifier = Modifier) {
 
 @Composable
 fun TuiVisualizer(
+    magnitudes: List<Float>,
     modifier: Modifier = Modifier,
-    isPlaying: Boolean = false,
     maxHeightLines: Int = 6
 ) {
-    val transition = androidx.compose.animation.core.rememberInfiniteTransition()
     val primaryColor = TuiTheme.colors.primary
     
     androidx.compose.foundation.layout.BoxWithConstraints(modifier = modifier) {
-        val density = androidx.compose.ui.platform.LocalDensity.current
-        val fontSize = TuiTheme.typography.fontSize
-        val charHeightPx = with(density) { fontSize.toPx() }
-        val charWidthPx = charHeightPx * 0.6f
-        
-        val barCount = (constraints.maxWidth / charWidthPx).toInt().coerceAtLeast(10)
-        
-        val animatedValues = (0 until barCount).map { i ->
-            if (isPlaying) {
-                transition.animateFloat(
-                    initialValue = 0.1f,
-                    targetValue = 1.0f,
-                    animationSpec = androidx.compose.animation.core.infiniteRepeatable(
-                        animation = androidx.compose.animation.core.tween(
-                            durationMillis = (500 + (Math.sin(i.toDouble() * 0.5) * 200) + (Math.random() * 300)).toInt(),
-                            easing = androidx.compose.animation.core.FastOutSlowInEasing
-                        ),
-                        repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
-                    ),
-                    label = "bar_$i"
-                )
-            } else {
-                androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(0.1f) }
-            }
-        }
-
         androidx.compose.foundation.Canvas(
             modifier = Modifier.fillMaxSize()
         ) {
             val totalWidth = size.width
             val totalHeight = size.height
+            
+            val displayMagnitudes = if (magnitudes.isEmpty()) {
+                List(20) { 0f }
+            } else {
+                magnitudes
+            }
+            
+            val barCount = displayMagnitudes.size
             val barW = totalWidth / barCount
             val blockH = totalHeight / maxHeightLines
             
             for (i in 0 until barCount) {
-                val value = animatedValues[i].value
+                val value = displayMagnitudes[i]
+                
+                // Draw a very faint baseline for all bars
+                drawRect(
+                    color = primaryColor.copy(alpha = 0.1f),
+                    topLeft = Offset(i * barW + barW * 0.1f, totalHeight - 2.dp.toPx()),
+                    size = Size(barW * 0.8f, 2.dp.toPx())
+                )
+
                 val blocksToDraw = (value * maxHeightLines).toInt().coerceIn(0, maxHeightLines)
                 
                 for (j in 0 until blocksToDraw) {

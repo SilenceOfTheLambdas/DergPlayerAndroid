@@ -36,6 +36,7 @@ fun TuiPlayerScreen(
     nextTitle: String = "None",
     volume: Float = 1.0f,
     systemStatus: String = "",
+    visualizerMagnitudes: List<Float> = emptyList(),
     onPrevious: () -> Unit = {},
     onTogglePlay: () -> Unit = {},
     onNext: () -> Unit = {},
@@ -136,9 +137,9 @@ fun TuiPlayerScreen(
             // Visualizer
             TuiBorderBox(modifier = Modifier.fillMaxWidth().weight(0.5f), title = "VISUALIZER") {
                 TuiVisualizer(
+                    magnitudes = visualizerMagnitudes,
                     modifier = Modifier.fillMaxSize().padding(vertical = 4.dp),
-                    maxHeightLines = 5,
-                    isPlaying = isPlaying
+                    maxHeightLines = 5
                 )
             }
             
