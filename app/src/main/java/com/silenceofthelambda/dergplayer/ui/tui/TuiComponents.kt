@@ -228,7 +228,7 @@ fun TuiLoadingIndicator(modifier: Modifier = Modifier) {
 fun TuiVisualizer(
     magnitudes: List<Float>,
     modifier: Modifier = Modifier,
-    maxHeightLines: Int = 6
+    maxHeightLines: Int = 8
 ) {
     val primaryColor = TuiTheme.colors.primary
     
@@ -271,13 +271,11 @@ fun TuiVisualizer(
                 
                 // Partial block for smoother look
                 val remainder = (value * maxHeightLines) - blocksToDraw
-                if (remainder > 0.2f && blocksToDraw < maxHeightLines) {
-                    val partialH = if (remainder > 0.6f) blockH * 0.8f else blockH * 0.4f
-                    val yOffset = if (remainder > 0.6f) blockH * 0.1f else blockH * 0.5f
-                    
+                if (remainder > 0.1f && blocksToDraw < maxHeightLines) {
+                    val partialH = (remainder * blockH * 0.8f).coerceAtLeast(1.dp.toPx())
                     drawRect(
                         color = primaryColor,
-                        topLeft = Offset(i * barW + barW * 0.1f, totalHeight - (blocksToDraw + 1) * blockH + yOffset),
+                        topLeft = Offset(i * barW + barW * 0.1f, totalHeight - (blocksToDraw + 1) * blockH + (blockH * 0.9f - partialH)),
                         size = Size(barW * 0.8f, partialH)
                     )
                 }

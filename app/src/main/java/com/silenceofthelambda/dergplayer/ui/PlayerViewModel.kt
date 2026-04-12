@@ -571,21 +571,28 @@ class PlayerViewModel(
     }
 
     private fun calculateMagnitudes(fft: ByteArray): List<Float> {
-        // FFT format: [real DC, real Nyquist, real bin1, imag bin1, real bin2, imag bin2, ...]
-        val n = (fft.size / 2).coerceAtMost(64)
+        val n = fft.size / 2
         val magnitudes = mutableListOf<Float>()
-        
-        for (i in 1 until n) { // Skip DC and Nyquist for visual simplicity
-            val r = fft[2 * i].toInt()
-            val im = fft[2 * i + 1].toInt()
-            val mag = Math.hypot(r.toDouble(), im.toDouble()).toFloat()
-            
+        val numBars = 80 // Increased from 64 for more detail
+
+        for (i in 0 until numBars) {
+            // Logarithmic distribution to cover more frequencies across the audible spectrum
+            val startBin = Math.pow(n.toDouble(), (i.toDouble() / numBars)).toInt().coerceIn(1, n - 1)
+            val endBin = Math.pow(n.toDouble(), ((i + 1).toDouble() / numBars)).toInt().coerceIn(1, n - 1)
+
+            var maxMag = 0f
+            // Use the maximum magnitude in the range for a more dynamic feel
+            for (j in startBin..endBin) {
+                val r = fft[2 * j].toInt()
+                val im = fft[2 * j + 1].toInt()
+                val mag = Math.hypot(r.toDouble(), im.toDouble()).toFloat()
+                if (mag > maxMag) maxMag = mag
+            }
+
             // Normalize and scale. FFT values are signed bytes (-128 to 127).
-            // hypot(128, 128) is ~181.
-            // Using a more aggressive scaling and sqrt for better visual response.
-            val normalized = (mag / 100f).coerceIn(0f, 1f)
+            // hypot(128, 128) is ~181. Using 100f as divisor for sensitivity.
+            val normalized = (maxMag / 100f).coerceIn(0f, 1f)
             val scaledMag = Math.sqrt(normalized.toDouble()).toFloat()
-            
             magnitudes.add(scaledMag)
         }
         return magnitudes

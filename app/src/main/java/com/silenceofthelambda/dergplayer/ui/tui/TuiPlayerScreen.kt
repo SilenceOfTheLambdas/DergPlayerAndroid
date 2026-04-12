@@ -143,7 +143,7 @@ fun TuiPlayerScreen(
                 TuiVisualizer(
                     magnitudes = visualizerMagnitudes,
                     modifier = Modifier.fillMaxSize().padding(vertical = 4.dp),
-                    maxHeightLines = 5
+                    maxHeightLines = 8
                 )
             }
             
