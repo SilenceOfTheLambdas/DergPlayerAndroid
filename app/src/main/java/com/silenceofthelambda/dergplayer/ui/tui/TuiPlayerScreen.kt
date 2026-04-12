@@ -27,6 +27,7 @@ fun TuiPlayerScreen(
     shuffleMode: ShuffleMode = ShuffleMode.OFF,
     repeatMode: Int = Player.REPEAT_MODE_OFF,
     currentScheme: String = "Matrix",
+    asciiArt: String = "",
     onPrevious: () -> Unit = {},
     onTogglePlay: () -> Unit = {},
     onNext: () -> Unit = {},
@@ -65,23 +66,41 @@ fun TuiPlayerScreen(
             // Artwork Placeholder
             TuiBorderBox(
                 modifier = Modifier.fillMaxWidth().weight(1f),
-                title = "VISUALIZER"
+                title = "ARTWORK"
             ) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    TuiText(
-                        text = """
-                            .------------------------.
-                            |                        |
-                            |       /^^^^^^^\        |
-                            |      |  (o)(o)  |      |
-                            |      |    ^^    |      |
-                            |       \_______/        |
-                            |                        |
-                            '------------------------'
-                        """.trimIndent(),
-                        style = TuiTheme.typography.copy(lineHeight = 12.sp, fontSize = 10.sp)
-                    )
+                    if (asciiArt.isNotEmpty()) {
+                        TuiText(
+                            text = asciiArt,
+                            style = TuiTheme.typography.copy(lineHeight = 10.sp, fontSize = 8.sp)
+                        )
+                    } else {
+                        TuiText(
+                            text = """
+                                .------------------------.
+                                |                        |
+                                |       /^^^^^^^\        |
+                                |      |  (o)(o)  |      |
+                                |      |    ^^    |      |
+                                |       \_______/        |
+                                |                        |
+                                '------------------------'
+                            """.trimIndent(),
+                            style = TuiTheme.typography.copy(lineHeight = 12.sp, fontSize = 10.sp)
+                        )
+                    }
                 }
+            }
+            
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Visualizer
+            TuiBorderBox(modifier = Modifier.fillMaxWidth(), title = "VISUALIZER") {
+                TuiVisualizer(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    maxHeightLines = 5,
+                    isPlaying = isPlaying
+                )
             }
             
             Spacer(modifier = Modifier.height(16.dp))

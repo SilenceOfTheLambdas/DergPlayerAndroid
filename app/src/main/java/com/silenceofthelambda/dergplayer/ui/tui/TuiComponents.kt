@@ -1,5 +1,6 @@
 package com.silenceofthelambda.dergplayer.ui.tui
 
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -178,4 +179,60 @@ fun TuiTextField(
 @Composable
 fun TuiLoadingIndicator(modifier: Modifier = Modifier) {
     TuiText(text = " LOADING... ", modifier = modifier.padding(16.dp))
+}
+
+@Composable
+fun TuiVisualizer(
+    modifier: Modifier = Modifier,
+    isPlaying: Boolean = false,
+    maxHeightLines: Int = 6
+) {
+    androidx.compose.foundation.layout.BoxWithConstraints(modifier = modifier) {
+        val density = androidx.compose.ui.platform.LocalDensity.current
+        val fontSize = TuiTheme.typography.fontSize
+        // Estimated width for JetBrains Mono character
+        val charWidth = with(density) { (fontSize.toPx() * 0.6f).toDp() }
+        
+        val barCount = (maxWidth / charWidth).toInt().coerceAtLeast(10)
+        val totalSteps = maxHeightLines * 2
+
+        val transition = androidx.compose.animation.core.rememberInfiniteTransition()
+        val animatedValues = (0 until barCount).map { i ->
+            if (isPlaying) {
+                transition.animateFloat(
+                    initialValue = 0.1f,
+                    targetValue = 1f,
+                    animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+                        animation = androidx.compose.animation.core.tween(
+                            durationMillis = (400 + (Math.random() * 600)).toInt(),
+                            easing = androidx.compose.animation.core.FastOutSlowInEasing
+                        ),
+                        repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
+                    ),
+                    label = "bar_$i"
+                )
+            } else {
+                androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(0.1f) }
+            }
+        }
+
+        TuiText(
+            text = buildString {
+                for (l in maxHeightLines - 1 downTo 0) {
+                    for (i in 0 until barCount) {
+                        val h = (animatedValues[i].value * totalSteps).toInt()
+                        if (h >= 2 * l + 2) {
+                            append("█")
+                        } else if (h == 2 * l + 1) {
+                            append("▄")
+                        } else {
+                            append(" ")
+                        }
+                    }
+                    if (l > 0) append("\n")
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
 }

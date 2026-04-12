@@ -21,6 +21,7 @@ import com.silenceofthelambda.dergplayer.ui.tui.AmberColors
 import com.silenceofthelambda.dergplayer.ui.tui.CyberpunkColors
 import com.silenceofthelambda.dergplayer.ui.tui.MatrixColors
 import com.silenceofthelambda.dergplayer.ui.tui.TuiColors
+import com.silenceofthelambda.dergplayer.ui.tui.TuiUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -72,6 +73,9 @@ class PlayerViewModel(
 
     private val _dominantColor = MutableStateFlow<Color>(Color.Black)
     val dominantColor: StateFlow<Color> = _dominantColor
+
+    private val _asciiArt = MutableStateFlow("")
+    val asciiArt: StateFlow<String> = _asciiArt
 
     private val _tuiSchemeName = MutableStateFlow("Matrix")
     val tuiSchemeName: StateFlow<String> = _tuiSchemeName
@@ -314,6 +318,11 @@ class PlayerViewModel(
             val result = loader.execute(request)
             if (result is SuccessResult) {
                 val bitmap = (result.drawable as BitmapDrawable).bitmap
+                
+                // Generate ASCII art
+                val ascii = TuiUtils.bitmapToAscii(bitmap, 40, 20)
+                _asciiArt.value = ascii
+
                 val palette = Palette.from(bitmap).generate()
                 val color = palette.getVibrantColor(palette.getMutedColor(0xFF121212.toInt()))
                 _dominantColor.value = Color(color)

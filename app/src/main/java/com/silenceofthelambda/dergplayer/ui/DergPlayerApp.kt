@@ -29,6 +29,7 @@ fun DergPlayerApp(viewModel: PlayerViewModel, youtubeClient: YouTubeClient, refr
     val repeatMode by viewModel.repeatMode.collectAsState()
     val playbackPosition by viewModel.playbackPosition.collectAsState()
     val duration by viewModel.duration.collectAsState()
+    val asciiArt by viewModel.asciiArt.collectAsState()
 
     TuiTheme(colors = tuiColors) {
         Box(modifier = Modifier.fillMaxSize().background(TuiTheme.colors.background)) {
@@ -95,6 +96,7 @@ fun DergPlayerApp(viewModel: PlayerViewModel, youtubeClient: YouTubeClient, refr
                                 shuffleMode = shuffleMode,
                                 repeatMode = repeatMode,
                                 currentScheme = tuiSchemeName,
+                                asciiArt = asciiArt,
                                 onPrevious = { viewModel.skipToPrevious() },
                                 onTogglePlay = { viewModel.togglePlayPause() },
                                 onNext = { viewModel.skipToNext() },
