@@ -253,9 +253,26 @@ class PlayerViewModel(
             // Add related songs to queue if smart shuffle is enabled
             if (_shuffleMode.value == ShuffleMode.SMART) {
                 val currentIds = _queue.value.map { it.id }.toSet()
-                val newRelated = recommendations.filterNot { it.id in currentIds }
+                // Limit to 3 recommendations as requested
+                val newRelated = recommendations.filterNot { it.id in currentIds }.take(3)
                 if (newRelated.isNotEmpty()) {
-                    _queue.value = _queue.value + newRelated
+                    val currentQueue = _queue.value.toMutableList()
+                    val currentIdx = currentQueue.indexOfFirst { it.id == song.id }
+                    val remainingIdx = if (currentIdx != -1) currentIdx + 1 else currentQueue.size
+                    val remainingCount = currentQueue.size - remainingIdx
+                    
+                    if (remainingCount > 0) {
+                        // Insert at regular intervals within the remaining queue
+                        val interval = (remainingCount / newRelated.size).coerceAtLeast(1)
+                        newRelated.forEachIndexed { i, relSong ->
+                            val insertPos = (remainingIdx + (i + 1) * interval + i).coerceAtMost(currentQueue.size)
+                            currentQueue.add(insertPos, relSong)
+                        }
+                    } else {
+                        // Append if remaining queue is empty
+                        currentQueue.addAll(newRelated)
+                    }
+                    _queue.value = currentQueue
                     showStatus("SMART: +${newRelated.size} SONGS")
                 }
             }
@@ -282,6 +299,22 @@ class PlayerViewModel(
             val songs = youtubeClient.getPlaylistItems(playlistId)
             if (songs.isNotEmpty()) {
                 playSong(songs.first(), songs)
+            } else {
+                showStatus("EMPTY PLAYLIST")
+            }
+        }
+    }
+
+    fun shufflePlaylist(playlistId: String) {
+        viewModelScope.launch {
+            showStatus("SHUFFLING PLAYLIST...")
+            val songs = youtubeClient.getPlaylistItems(playlistId)
+            if (songs.isNotEmpty()) {
+                if (_shuffleMode.value == ShuffleMode.OFF) {
+                    _shuffleMode.value = ShuffleMode.ON
+                }
+                val shuffled = songs.shuffled()
+                playSong(shuffled.first(), shuffled)
             } else {
                 showStatus("EMPTY PLAYLIST")
             }

@@ -19,8 +19,10 @@ fun DergPlayerApp(viewModel: PlayerViewModel, youtubeClient: YouTubeClient, refr
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
     val isPlayerScreen = currentRoute == Screen.Player.route
+    val isQueueScreen = currentRoute == Screen.Queue.route
 
     val currentSong by viewModel.currentSong.collectAsState()
+    val queue by viewModel.queue.collectAsState()
     val isPlaying by viewModel.isPlaying.collectAsState()
     val tuiColors by viewModel.tuiColors.collectAsState()
     val tuiSchemeName by viewModel.tuiSchemeName.collectAsState()
@@ -40,7 +42,7 @@ fun DergPlayerApp(viewModel: PlayerViewModel, youtubeClient: YouTubeClient, refr
             ScanlineOverlay()
 
             Column(modifier = Modifier.fillMaxSize()) {
-                if (!isPlayerScreen) {
+                if (!isPlayerScreen && !isQueueScreen) {
                     TuiTopBar(
                         title = "DERG PLAYER V1.1.0",
                         onSearchClick = { navController.navigate(Screen.Search.route) },
@@ -65,6 +67,10 @@ fun DergPlayerApp(viewModel: PlayerViewModel, youtubeClient: YouTubeClient, refr
                                 },
                                 onPlayPlaylist = { playlistId ->
                                     viewModel.playPlaylist(playlistId)
+                                    navController.navigate(Screen.Player.route)
+                                },
+                                onShufflePlaylist = { playlistId ->
+                                    viewModel.shufflePlaylist(playlistId)
                                     navController.navigate(Screen.Player.route)
                                 }
                             )
@@ -122,6 +128,18 @@ fun DergPlayerApp(viewModel: PlayerViewModel, youtubeClient: YouTubeClient, refr
                                 onSetScheme = { viewModel.setTuiScheme(it) },
                                 onSeek = { viewModel.seekTo((it * duration).toLong()) },
                                 onVolumeChange = { viewModel.setVolume(it) },
+                                onQueueClick = { navController.navigate(Screen.Queue.route) },
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
+                        composable(Screen.Queue.route) {
+                            TuiQueueScreen(
+                                queue = queue,
+                                currentSongId = currentSong?.id,
+                                onSongClick = { song ->
+                                    viewModel.playSong(song)
+                                    navController.navigate(Screen.Player.route)
+                                },
                                 onBack = { navController.popBackStack() }
                             )
                         }
@@ -129,7 +147,7 @@ fun DergPlayerApp(viewModel: PlayerViewModel, youtubeClient: YouTubeClient, refr
                 }
 
                 // MiniPlayer
-                if (!isPlayerScreen) {
+                if (!isPlayerScreen && !isQueueScreen) {
                     currentSong?.let { song ->
                         TuiMiniPlayer(
                             song = song,

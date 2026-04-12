@@ -7,4 +7,5 @@ sealed class Screen(val route: String) {
     }
     object Search : Screen("search")
     object Player : Screen("player")
+    object Queue : Screen("queue")
 }

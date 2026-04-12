@@ -58,18 +58,23 @@ fun TuiText(
 fun TuiBorderBox(
     modifier: Modifier = Modifier,
     title: String? = null,
+    active: Boolean = false,
     content: @Composable BoxScope.() -> Unit
 ) {
+    val backgroundColor = if (active) TuiTheme.colors.primary else TuiTheme.colors.background
+    val foregroundColor = if (active) TuiTheme.colors.background else TuiTheme.colors.primary
+
     Box(
         modifier = modifier
-            .border(1.dp, TuiTheme.colors.primary.copy(alpha = 0.5f))
+            .background(backgroundColor)
+            .border(1.dp, foregroundColor.copy(alpha = 0.5f))
             .padding(12.dp)
     ) {
         // Corners decoration
-        TuiText(text = "┌", modifier = Modifier.align(Alignment.TopStart).offset(x = (-8).dp, y = (-8).dp))
-        TuiText(text = "┐", modifier = Modifier.align(Alignment.TopEnd).offset(x = 8.dp, y = (-8).dp))
-        TuiText(text = "└", modifier = Modifier.align(Alignment.BottomStart).offset(x = (-8).dp, y = 8.dp))
-        TuiText(text = "┘", modifier = Modifier.align(Alignment.BottomEnd).offset(x = 8.dp, y = 8.dp))
+        TuiText(text = "┌", color = foregroundColor, modifier = Modifier.align(Alignment.TopStart).offset(x = (-8).dp, y = (-8).dp))
+        TuiText(text = "┐", color = foregroundColor, modifier = Modifier.align(Alignment.TopEnd).offset(x = 8.dp, y = (-8).dp))
+        TuiText(text = "└", color = foregroundColor, modifier = Modifier.align(Alignment.BottomStart).offset(x = (-8).dp, y = 8.dp))
+        TuiText(text = "┘", color = foregroundColor, modifier = Modifier.align(Alignment.BottomEnd).offset(x = 8.dp, y = 8.dp))
 
         if (title != null) {
             TuiText(
@@ -77,9 +82,9 @@ fun TuiBorderBox(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .offset(y = (-20).dp)
-                    .background(TuiTheme.colors.background)
+                    .background(backgroundColor)
                     .padding(horizontal = 4.dp),
-                color = TuiTheme.colors.primary,
+                color = foregroundColor,
                 fontWeight = FontWeight.Bold,
                 style = TuiTheme.typography.copy(fontSize = 11.sp)
             )

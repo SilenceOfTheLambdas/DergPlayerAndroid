@@ -46,6 +46,7 @@ fun TuiPlayerScreen(
     onSetScheme: (String) -> Unit = {},
     onSeek: (Float) -> Unit = {},
     onVolumeChange: (Float) -> Unit = {},
+    onQueueClick: () -> Unit = {},
     onBack: () -> Unit = {}
 ) {
     Box(modifier = Modifier.fillMaxSize().background(TuiTheme.colors.background)) {
@@ -69,7 +70,10 @@ fun TuiPlayerScreen(
                         text = "DERG PLAYER V1.1.0-TUI",
                         fontWeight = FontWeight.Bold
                     )
-                    TuiButton(text = "LIBRARY", onClick = onBack)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TuiButton(text = "QUEUE", onClick = onQueueClick)
+                        TuiButton(text = "LIBRARY", onClick = onBack)
+                    }
                 }
             }
             
