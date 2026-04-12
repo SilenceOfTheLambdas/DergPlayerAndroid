@@ -243,6 +243,7 @@ class PlayerViewModel(
     }
 
     fun skipToNext() {
+        showStatus("SKIPPING NEXT")
         val currentList = _queue.value
         val currentIndex = currentList.indexOfFirst { it.id == _currentSong.value?.id }
         
@@ -255,10 +256,12 @@ class PlayerViewModel(
 
     fun skipToPrevious() {
         if (_player.currentPosition > 3000) {
+            showStatus("RESTARTING TRACK")
             _player.seekTo(0)
             return
         }
 
+        showStatus("SKIPPING PREV")
         val currentList = _queue.value
         val currentIndex = currentList.indexOfFirst { it.id == _currentSong.value?.id }
         
@@ -349,7 +352,7 @@ class PlayerViewModel(
                 val bitmap = (result.drawable as BitmapDrawable).bitmap
                 
                 // Generate ASCII art
-                val ascii = TuiUtils.bitmapToAscii(bitmap, 32, 16)
+                val ascii = TuiUtils.bitmapToAscii(bitmap, 64, 40)
                 _asciiArt.value = ascii
 
                 val palette = Palette.from(bitmap).generate()

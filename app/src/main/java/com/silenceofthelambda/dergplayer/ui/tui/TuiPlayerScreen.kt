@@ -2,11 +2,15 @@ package com.silenceofthelambda.dergplayer.ui.tui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -73,23 +77,55 @@ fun TuiPlayerScreen(
                 modifier = Modifier.fillMaxWidth().weight(1f),
                 title = "ARTWORK"
             ) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                var offsetX by remember { mutableStateOf(0f) }
+                val haptic = LocalHapticFeedback.current
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(onNext, onPrevious) {
+                            val threshold = 80.dp.toPx()
+                            detectHorizontalDragGestures(
+                                onDragStart = { offsetX = 0f },
+                                onDragEnd = {
+                                    if (offsetX < -threshold) {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        onNext()
+                                    } else if (offsetX > threshold) {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        onPrevious()
+                                    }
+                                    offsetX = 0f
+                                },
+                                onHorizontalDrag = { change, dragAmount ->
+                                    offsetX += dragAmount
+                                    change.consume()
+                                }
+                            )
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
                     if (asciiArt.isNotEmpty()) {
                         TuiText(
                             text = asciiArt,
-                            style = TuiTheme.typography.copy(lineHeight = 10.sp, fontSize = 8.sp)
+                            style = TuiTheme.typography.copy(lineHeight = 6.sp, fontSize = 6.sp),
+                            softWrap = false,
+                            overflow = TextOverflow.Clip
                         )
                     } else {
                         TuiText(
                             text = """
-                                .------------------------.
-                                |                        |
-                                |       /^^^^^^^\        |
-                                |      |  (o)(o)  |      |
-                                |      |    ^^    |      |
-                                |       \_______/        |
-                                |                        |
-                                '------------------------'
+                                     .-----------------------.
+                                     |   /~~~~~~~~~~~~~~~\   |
+                                     |  /                 \  |
+                                     | |   (O)       (O)   | |
+                                     | |          V        | |
+                                     |  \       _____     /  |
+                                     |   \     \_____/   /   |
+                                     |    \_____________/    |
+                                     |                       |
+                                     |     - NO ARTWORK -    |
+                                     '-----------------------'
                             """.trimIndent(),
                             style = TuiTheme.typography.copy(lineHeight = 12.sp, fontSize = 10.sp)
                         )
