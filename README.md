@@ -35,4 +35,5 @@ The project uses several libraries, including:
 
 ## License
 
-*(Add license information if applicable)*
+This project is licensed under the GNU General Public License v3.0 - see the 
+[LICENSE](LICENSE.md) file for details.

@@ -53,7 +53,7 @@ class PlayerViewModel(
     val isPlaying: StateFlow<Boolean> = _isPlaying
 
     private val _relatedSongs = MutableStateFlow<List<Song>>(emptyList())
-    val relatedSongs: StateFlow<List<Song>> = _relatedSongs
+    // Note: Public StateFlow removed as it is no longer used in UI, only internally for Smart Shuffle.
 
     private val _playbackPosition = MutableStateFlow(0L)
     val playbackPosition: StateFlow<Long> = _playbackPosition
@@ -119,7 +119,7 @@ class PlayerViewModel(
 
     private fun hasNext(): Boolean {
         val currentIdx = _queue.value.indexOfFirst { it.id == _currentSong.value?.id }
-        return currentIdx < _queue.value.size - 1 || _relatedSongs.value.isNotEmpty()
+        return currentIdx < _queue.value.size - 1
     }
 
     fun playSong(song: Song, contextQueue: List<Song> = emptyList()) {
@@ -151,8 +151,8 @@ class PlayerViewModel(
             val info = extractor.getFullStreamInfo(song.id)
             _relatedSongs.value = info.relatedSongs
             
-            // Add related songs to queue if smart shuffle is enabled or queue is small
-            if (_shuffleMode.value == ShuffleMode.SMART || _queue.value.size <= 1) {
+            // Add related songs to queue if smart shuffle is enabled
+            if (_shuffleMode.value == ShuffleMode.SMART) {
                 val currentIds = _queue.value.map { it.id }.toSet()
                 val newRelated = info.relatedSongs.filterNot { it.id in currentIds }
                 _queue.value = _queue.value + newRelated
@@ -193,14 +193,6 @@ class PlayerViewModel(
         
         if (currentIndex < currentList.size - 1) {
             playSong(currentList[currentIndex + 1])
-        } else if (_relatedSongs.value.isNotEmpty()) {
-            // If at end of queue, but we have recommendations, play a random one or first
-            val nextSong = if (_shuffleMode.value != ShuffleMode.OFF) {
-                _relatedSongs.value.random()
-            } else {
-                _relatedSongs.value.first()
-            }
-            playSong(nextSong)
         } else if (_repeatMode.value == Player.REPEAT_MODE_ALL && currentList.isNotEmpty()) {
             playSong(currentList.first())
         }

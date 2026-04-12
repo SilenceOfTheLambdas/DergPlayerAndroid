@@ -455,7 +455,6 @@ fun SearchScreen(youtubeClient: YouTubeClient, onSongClick: (Song, List<Song>) -
 @Composable
 fun PlayerScreen(viewModel: PlayerViewModel, onBack: () -> Unit) {
     val currentSong by viewModel.currentSong.collectAsState()
-    val relatedSongs by viewModel.relatedSongs.collectAsState()
     val remainingQueue by viewModel.remainingQueue.collectAsState()
     val isPlaying by viewModel.isPlaying.collectAsState()
     val position by viewModel.playbackPosition.collectAsState()
@@ -497,23 +496,6 @@ fun PlayerScreen(viewModel: PlayerViewModel, onBack: () -> Unit) {
                             )
                         }
                         items(remainingQueue) { song ->
-                            SongItem(
-                                song = song,
-                                onClick = { viewModel.playSong(song) }
-                            )
-                        }
-                    }
-
-                    if (relatedSongs.isNotEmpty()) {
-                        item {
-                            Text(
-                                "Recommended",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black, letterSpacing = 1.sp),
-                                color = Color.White,
-                                modifier = Modifier.padding(bottom = 16.dp, top = if (remainingQueue.isEmpty()) 8.dp else 24.dp)
-                            )
-                        }
-                        items(relatedSongs) { song ->
                             SongItem(
                                 song = song,
                                 onClick = { viewModel.playSong(song) }
