@@ -11,7 +11,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.silenceofthelambda.dergplayer.model.ShuffleMode
 import com.silenceofthelambda.dergplayer.ui.PlayerViewModel
+import androidx.media3.common.Player
 
 @Composable
 fun TuiPlayerScreen(
@@ -22,11 +24,15 @@ fun TuiPlayerScreen(
     totalTime: String = "00:00",
     isPlaying: Boolean = false,
     isLiked: Boolean = false,
+    shuffleMode: ShuffleMode = ShuffleMode.OFF,
+    repeatMode: Int = Player.REPEAT_MODE_OFF,
     currentScheme: String = "Matrix",
     onPrevious: () -> Unit = {},
     onTogglePlay: () -> Unit = {},
     onNext: () -> Unit = {},
     onToggleLike: () -> Unit = {},
+    onToggleShuffle: () -> Unit = {},
+    onToggleRepeat: () -> Unit = {},
     onSetScheme: (String) -> Unit = {},
     onBack: () -> Unit = {}
 ) {
@@ -122,6 +128,21 @@ fun TuiPlayerScreen(
                         TuiButton(text = "NEXT >", onClick = onNext)
                     }
                     Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        TuiButton(text = "SHUF: ${shuffleMode.name}", onClick = onToggleShuffle)
+                        TuiButton(
+                            text = "REP: ${when(repeatMode) {
+                                Player.REPEAT_MODE_ONE -> "ONE"
+                                Player.REPEAT_MODE_ALL -> "ALL"
+                                else -> "OFF"
+                            }}",
+                            onClick = onToggleRepeat
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
                     TuiButton(
                         text = if (isLiked) "<3 LIKED" else "LIKE?",
                         onClick = onToggleLike
@@ -162,7 +183,9 @@ fun TuiPlayerScreenPreview() {
             currentTime = "01:45",
             totalTime = "04:10",
             isPlaying = true,
-            isLiked = true
+            isLiked = true,
+            shuffleMode = ShuffleMode.ON,
+            repeatMode = Player.REPEAT_MODE_ALL
         )
     }
 }

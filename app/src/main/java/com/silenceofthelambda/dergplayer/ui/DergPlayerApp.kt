@@ -25,6 +25,8 @@ fun DergPlayerApp(viewModel: PlayerViewModel, youtubeClient: YouTubeClient, refr
     val tuiColors by viewModel.tuiColors.collectAsState()
     val tuiSchemeName by viewModel.tuiSchemeName.collectAsState()
     val isLiked by viewModel.isLiked.collectAsState()
+    val shuffleMode by viewModel.shuffleMode.collectAsState()
+    val repeatMode by viewModel.repeatMode.collectAsState()
     val playbackPosition by viewModel.playbackPosition.collectAsState()
     val duration by viewModel.duration.collectAsState()
 
@@ -90,11 +92,15 @@ fun DergPlayerApp(viewModel: PlayerViewModel, youtubeClient: YouTubeClient, refr
                                 totalTime = formatDuration(duration),
                                 isPlaying = isPlaying,
                                 isLiked = isLiked,
+                                shuffleMode = shuffleMode,
+                                repeatMode = repeatMode,
                                 currentScheme = tuiSchemeName,
                                 onPrevious = { viewModel.skipToPrevious() },
                                 onTogglePlay = { viewModel.togglePlayPause() },
                                 onNext = { viewModel.skipToNext() },
                                 onToggleLike = { viewModel.toggleLike() },
+                                onToggleShuffle = { viewModel.toggleShuffle() },
+                                onToggleRepeat = { viewModel.toggleRepeat() },
                                 onSetScheme = { viewModel.setTuiScheme(it) },
                                 onBack = { navController.popBackStack() }
                             )

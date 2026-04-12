@@ -119,20 +119,28 @@ fun TuiButton(
 @Composable
 fun TuiProgressBar(
     progress: Float,
-    modifier: Modifier = Modifier,
-    segments: Int = 20
+    modifier: Modifier = Modifier
 ) {
-    val filledSegments = (progress * segments).toInt().coerceIn(0, segments)
-    val emptySegments = segments - filledSegments
-    
-    val barText = buildString {
-        append("[")
-        repeat(filledSegments) { append("█") }
-        repeat(emptySegments) { append("░") }
-        append("]")
+    androidx.compose.foundation.layout.BoxWithConstraints(modifier = modifier) {
+        val density = androidx.compose.ui.platform.LocalDensity.current
+        val fontSize = TuiTheme.typography.fontSize
+        // Conservative estimate for monospaced font character width
+        val charWidth = with(density) { (fontSize.toPx() * 0.8f).toDp() }
+        val availableWidth = maxWidth
+        val segments = ((availableWidth / charWidth).toInt() - 4).coerceAtLeast(10)
+
+        val filledSegments = (progress * segments).toInt().coerceIn(0, segments)
+        val emptySegments = segments - filledSegments
+
+        val barText = buildString {
+            append("[")
+            repeat(filledSegments) { append("█") }
+            repeat(emptySegments) { append("░") }
+            append("]")
+        }
+
+        TuiText(text = barText)
     }
-    
-    TuiText(text = barText, modifier = modifier)
 }
 
 @Composable

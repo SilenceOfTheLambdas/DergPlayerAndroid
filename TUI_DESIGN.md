@@ -2,52 +2,39 @@
 
 ## 1. Principles
 
-- **Monospaced Typography**: All text elements must use a monospace font (e.g., `FontFamily.Monospace`) to maintain the terminal aesthetic and ensure character alignment.
-- **Retro Color Schemes**: Use high-contrast, terminal-like colors:
-  - Background: Pure Black (`#000000`) or deep Matrix Green/Blue backgrounds.
-  - Foreground: Bright Green (`#00FF00`), Amber (`#FFB000`), or Cyan (`#00FFFF`).
-- **ASCII-style UI Elements**: Instead of smooth shadows and rounded corners:
-  - Use ASCII characters for borders (`+`, `-`, `|`).
-  - Use block characters for progress bars (`█`, `░`).
-  - Use simple bracketed text for buttons (`[ PLAY ]`).
-- **Grid Layout**: Elements should ideally align to a conceptual grid of characters.
+- **Monospaced Typography**: All text elements use JetBrains Mono with font ligatures (via `TuiTheme`).
+- **Retro Color Schemes**: Multiple high-contrast, terminal-like color schemes (Matrix, Amber, Cyberpunk, Dynamic).
+- **Scanline Effects**: A subtle scanline overlay to enhance the CRT/terminal feel.
+- **ASCII-style UI Elements**:
+  - Box-drawing characters for borders (┌, ┐, └, ┘, █).
+  - Block characters for progress bars (█, ░).
+  - Bracketed text for buttons (`[ PLAY ]`).
+- **Grid Layout**: Elements align to a conceptual grid of characters.
 
 ## 2. UI Mappings
 
 | Modern Component | TUI-Inspired Alternative |
 | --- | --- |
 | **Progress Bar** | `[██████░░░░░░░░] 40%` |
-| **Button** | `< [ OK ] >` or `[X] Button` |
-| **Slider** | `----o----` |
-| **List Item** | `* Item Name` or `> Item Name` |
-| **Border/Card** | ASCII box: `+-------+` \| `\| Content \|` \| `+-------+` |
-| **Icon** | ASCII Art placeholders (e.g., `[#]` for artwork) or simple Unicode symbols. |
+| **Button** | `[ OK ]` or `[X] Button` |
+| **List Item** | `TuiBorderBox` with `TuiText` |
+| **Border/Card** | Box-drawing characters: `┌────┐` \| `│ │` \| `└────┘` |
+| **Loading** | `LOADING...` text |
 
-## 3. Conceptual Redesign
+## 3. Official Design
 
-The redesign aims to transform the current modern UI into a retro terminal experience.
+DergPlayerAndroid is now a full-screen Terminal User Interface (TUI) application.
 
-### Player Screen Mockup (Conceptual)
+### Navigation
 
-```
-+------------------------------------------+
-|  DERG PLAYER V1.0.0                      |
-+------------------------------------------+
-|  ARTWORK:                                |
-|  [####################################]  |
-|  [####################################]  |
-|  [####################################]  |
-+------------------------------------------+
-|  TITLE : Song of the Lambda              |
-|  ARTIST: Derg feat. Silence              |
-+------------------------------------------+
-|  PROGRESS:                               |
-|  [███████████████░░░░░░░░░░░░░░░░░░░░░]  |
-|  01:45 / 03:30                           |
-+------------------------------------------+
-|  CONTROLS:                               |
-|  [ < PREV ]  [ || PAUSE ]  [ NEXT > ]    |
-|                                          |
-|  [ <3 LIKE ]                             |
-+------------------------------------------+
-```
+The application uses a terminal-style navigation flow:
+- **Library**: List of playlists in `TuiBorderBox` containers.
+- **Playlist Detail**: Song list with titles, artists, and durations.
+- **Search**: Interactive terminal prompt for music discovery.
+- **Player**: Full-screen terminal dashboard for playback control and visualizer.
+
+### Interaction
+
+- **Buttons**: All buttons are text-based and bracketed.
+- **Text Fields**: Terminal prompts start with `>`.
+- **Themes**: Switchable color schemes via the player dashboard.
