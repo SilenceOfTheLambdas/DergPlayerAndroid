@@ -158,6 +158,15 @@ class PlayerViewModel(
             when (command.customAction) {
                 MediaPlaybackService.COMMAND_SKIP_NEXT -> skipToNext()
                 MediaPlaybackService.COMMAND_SKIP_PREV -> skipToPrevious()
+                MediaPlaybackService.COMMAND_SET_AUDIO_SESSION_ID -> {
+                    val sessionId = args.getInt("audio_session_id", 0)
+                    if (sessionId != 0) {
+                        currentAudioSessionId = sessionId
+                        if (_isPlaying.value) {
+                            updateVisualizer(true)
+                        }
+                    }
+                }
             }
             return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
         }
@@ -183,6 +192,7 @@ class PlayerViewModel(
                 
                 if (ctrl.isPlaying) {
                     startPositionUpdates()
+                    updateVisualizer(true)
                 }
             } catch (e: Exception) {
                 android.util.Log.e("PlayerViewModel", "Error connecting to MediaController", e)

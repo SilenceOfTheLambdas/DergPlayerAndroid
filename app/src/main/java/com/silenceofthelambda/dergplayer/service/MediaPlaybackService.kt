@@ -21,19 +21,33 @@ class MediaPlaybackService : MediaSessionService() {
     companion object {
         const val COMMAND_SKIP_NEXT = "com.silenceofthelambda.dergplayer.SKIP_NEXT"
         const val COMMAND_SKIP_PREV = "com.silenceofthelambda.dergplayer.SKIP_PREV"
+        const val COMMAND_SET_AUDIO_SESSION_ID = "com.silenceofthelambda.dergplayer.SET_AUDIO_SESSION_ID"
     }
 
     private var mediaSession: MediaSession? = null
     private lateinit var player: Player
+    private var exoPlayer: ExoPlayer? = null
 
     override fun onCreate() {
         super.onCreate()
         val p = ExoPlayer.Builder(this).build()
+        exoPlayer = p
         val audioAttributes = AudioAttributes.Builder()
             .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
             .setUsage(C.USAGE_MEDIA)
             .build()
         p.setAudioAttributes(audioAttributes, true)
+        
+        p.addListener(object : Player.Listener {
+            override fun onAudioSessionIdChanged(audioSessionId: Int) {
+                mediaSession?.connectedControllers?.forEach {
+                    val extras = Bundle().apply {
+                        putInt("audio_session_id", audioSessionId)
+                    }
+                    mediaSession?.sendCustomCommand(it, SessionCommand(COMMAND_SET_AUDIO_SESSION_ID, extras), extras)
+                }
+            }
+        })
         
         // Wrap player in ForwardingPlayer to force skip commands to be available
         val forwardingPlayer = object : ForwardingPlayer(p) {
@@ -74,11 +88,21 @@ class MediaPlaybackService : MediaSessionService() {
             val availableSessionCommands = MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
                 .add(SessionCommand(COMMAND_SKIP_NEXT, Bundle.EMPTY))
                 .add(SessionCommand(COMMAND_SKIP_PREV, Bundle.EMPTY))
+                .add(SessionCommand(COMMAND_SET_AUDIO_SESSION_ID, Bundle.EMPTY))
                 .build()
             
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                 .setAvailableSessionCommands(availableSessionCommands)
                 .build()
+        }
+
+        override fun onPostConnect(session: MediaSession, controller: MediaSession.ControllerInfo) {
+            exoPlayer?.let {
+                val extras = Bundle().apply {
+                    putInt("audio_session_id", it.audioSessionId)
+                }
+                session.sendCustomCommand(controller, SessionCommand(COMMAND_SET_AUDIO_SESSION_ID, extras), extras)
+            }
         }
 
         override fun onPlayerCommandRequest(
