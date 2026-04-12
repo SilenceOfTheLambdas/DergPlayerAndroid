@@ -1,6 +1,7 @@
 package com.silenceofthelambda.dergplayer.api
 
 import android.util.Log
+import android.util.LruCache
 import com.silenceofthelambda.dergplayer.model.Song
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -15,7 +16,11 @@ class StreamExtractor {
         val relatedSongs: List<Song>
     )
 
+    private val cache = LruCache<String, FullStreamInfo>(20)
+
     suspend fun getFullStreamInfo(videoId: String): FullStreamInfo = withContext(Dispatchers.IO) {
+        cache.get(videoId)?.let { return@withContext it }
+        
         try {
             val service = ServiceList.YouTube
             val url = "https://www.youtube.com/watch?v=$videoId"
@@ -47,7 +52,11 @@ class StreamExtractor {
                 } else null
             }
             
-            FullStreamInfo(streamUrl, relatedSongs)
+            val result = FullStreamInfo(streamUrl, relatedSongs)
+            if (streamUrl != null) {
+                cache.put(videoId, result)
+            }
+            result
         } catch (e: Exception) {
             Log.e("StreamExtractor", "Error fetching info for $videoId: ${e.message}", e)
             FullStreamInfo(null, emptyList())

@@ -18,6 +18,8 @@ import com.silenceofthelambda.dergplayer.api.StreamExtractor
 import com.silenceofthelambda.dergplayer.model.Song
 import com.silenceofthelambda.dergplayer.model.ShuffleMode
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -64,10 +66,17 @@ class PlayerViewModel(
     private val _dominantColor = MutableStateFlow<Color>(Color.Black)
     val dominantColor: StateFlow<Color> = _dominantColor
 
+    private var positionUpdateJob: Job? = null
+
     init {
         _player.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 _isPlaying.value = isPlaying
+                if (isPlaying) {
+                    startPositionUpdates()
+                } else {
+                    stopPositionUpdates()
+                }
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
@@ -78,15 +87,21 @@ class PlayerViewModel(
                 }
             }
         })
+    }
 
-        viewModelScope.launch {
+    private fun startPositionUpdates() {
+        positionUpdateJob?.cancel()
+        positionUpdateJob = viewModelScope.launch {
             while (true) {
-                if (_player.isPlaying) {
-                    _playbackPosition.value = _player.currentPosition
-                }
-                kotlinx.coroutines.delay(1000)
+                _playbackPosition.value = _player.currentPosition
+                delay(1000)
             }
         }
+    }
+
+    private fun stopPositionUpdates() {
+        positionUpdateJob?.cancel()
+        positionUpdateJob = null
     }
 
     private fun updateRemainingQueue() {

@@ -457,23 +457,13 @@ fun PlayerScreen(viewModel: PlayerViewModel, onBack: () -> Unit) {
     val currentSong by viewModel.currentSong.collectAsState()
     val remainingQueue by viewModel.remainingQueue.collectAsState()
     val isPlaying by viewModel.isPlaying.collectAsState()
-    val position by viewModel.playbackPosition.collectAsState()
-    val duration by viewModel.duration.collectAsState()
     val dominantColor by viewModel.dominantColor.collectAsState()
     val shuffleMode by viewModel.shuffleMode.collectAsState()
     val repeatMode by viewModel.repeatMode.collectAsState()
 
     var showQueue by remember { mutableStateOf(false) }
     val scaffoldState = rememberBottomSheetScaffoldState()
-    val scope = rememberCoroutineScope()
-    val offsetX = remember { Animatable(0f) }
 
-    val albumArtScale by animateFloatAsState(
-        targetValue = if (isPlaying) 1f else 0.85f,
-        animationSpec = tween(durationMillis = 500),
-        label = "AlbumArtScale"
-    )
-    
     if (showQueue) {
         PlayQueueScreen(viewModel = viewModel, onBack = { showQueue = false })
     } else {
@@ -544,189 +534,256 @@ fun PlayerScreen(viewModel: PlayerViewModel, onBack: () -> Unit) {
                 Column(
                     modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp)
                 ) {
-                    // Header
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 16.dp, bottom = 12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Minimize", tint = Color.White, modifier = Modifier.size(36.dp))
-                        }
-                        Text(
-                            "NOW PLAYING",
-                            style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 2.sp),
-                            color = Color.White.copy(alpha = 0.7f)
+                    PlayerHeader(onBack = onBack, onShowQueue = { showQueue = true })
+                    
+                    Spacer(modifier = Modifier.weight(1f))
+                    
+                    currentSong?.let { song ->
+                        AlbumArt(
+                            song = song,
+                            isPlaying = isPlaying,
+                            onSkipNext = { viewModel.skipToNext() },
+                            onSkipPrevious = { viewModel.skipToPrevious() }
                         )
-                        IconButton(onClick = { showQueue = true }) {
-                            Icon(Icons.Default.PlaylistPlay, contentDescription = "Queue", tint = Color.White, modifier = Modifier.size(28.dp))
-                        }
                     }
                     
                     Spacer(modifier = Modifier.weight(1f))
                     
-                    // Large Album Art
                     currentSong?.let { song ->
-                        Card(
-                            shape = RoundedCornerShape(24.dp),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 20.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .aspectRatio(1f)
-                                .graphicsLayer(
-                                    scaleX = albumArtScale, 
-                                    scaleY = albumArtScale,
-                                    translationX = offsetX.value
-                                )
-                                .padding(horizontal = 8.dp)
-                                .pointerInput(Unit) {
-                                    detectHorizontalDragGestures(
-                                        onHorizontalDrag = { change, dragAmount ->
-                                            change.consume()
-                                            scope.launch {
-                                                offsetX.snapTo(offsetX.value + dragAmount)
-                                            }
-                                        },
-                                        onDragEnd = {
-                                            if (offsetX.value > 200f) {
-                                                viewModel.skipToPrevious()
-                                            } else if (offsetX.value < -200f) {
-                                                viewModel.skipToNext()
-                                            }
-                                            scope.launch {
-                                                offsetX.animateTo(0f, tween(300))
-                                            }
-                                        },
-                                        onDragCancel = {
-                                            scope.launch {
-                                                offsetX.animateTo(0f, tween(300))
-                                            }
-                                        }
-                                    )
-                                }
-                        ) {
-                            AsyncImage(
-                                model = song.thumbnail,
-                                contentDescription = null,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
-                        }
-                    }
-                    
-                    Spacer(modifier = Modifier.weight(1f))
-                    
-                    // Song Info
-                    currentSong?.let { song ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    song.title,
-                                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Black),
-                                    color = Color.White,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Text(
-                                    song.artist,
-                                    style = MaterialTheme.typography.titleLarge,
-                                    color = Color.White.copy(alpha = 0.7f),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                            IconButton(onClick = { /* Like */ }) {
-                                Icon(Icons.Default.FavoriteBorder, contentDescription = "Like", tint = Color.White, modifier = Modifier.size(28.dp))
-                            }
-                        }
+                        SongInfo(song = song)
                     }
                     
                     Spacer(modifier = Modifier.height(24.dp))
                     
-                    // Progress Slider
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Slider(
-                            value = if (duration > 0) position.toFloat() / duration.toFloat() else 0f,
-                            onValueChange = { viewModel.seekTo((it * duration).toLong()) },
-                            colors = SliderDefaults.colors(
-                                thumbColor = Color.White,
-                                activeTrackColor = Color.White,
-                                inactiveTrackColor = Color.White.copy(alpha = 0.2f)
-                            )
-                        )
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                formatDuration(position),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = Color.White.copy(alpha = 0.5f)
-                            )
-                            Text(
-                                formatDuration(duration),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = Color.White.copy(alpha = 0.5f)
-                            )
-                        }
-                    }
+                    PlaybackProgress(
+                        positionFlow = viewModel.playbackPosition,
+                        durationFlow = viewModel.duration,
+                        onSeek = { viewModel.seekTo(it) }
+                    )
                     
                     Spacer(modifier = Modifier.height(24.dp))
                     
-                    // Controls
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        IconButton(onClick = { viewModel.toggleShuffle() }) {
-                            Icon(
-                                if (shuffleMode == ShuffleMode.SMART) Icons.Default.AutoAwesome else Icons.Default.Shuffle, 
-                                contentDescription = "Shuffle", 
-                                tint = if (shuffleMode != ShuffleMode.OFF) TidalAccent else Color.White.copy(alpha = 0.5f), 
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                        IconButton(onClick = { viewModel.skipToPrevious() }, modifier = Modifier.size(56.dp)) {
-                            Icon(Icons.Default.SkipPrevious, contentDescription = "Previous", tint = Color.White, modifier = Modifier.size(42.dp))
-                        }
-                        Box(
-                            modifier = Modifier
-                                .size(80.dp)
-                                .clip(CircleShape)
-                                .background(Color.White)
-                                .clickable { viewModel.togglePlayPause() },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                contentDescription = "Play/Pause",
-                                tint = Color.Black,
-                                modifier = Modifier.size(48.dp)
-                            )
-                        }
-                        IconButton(onClick = { viewModel.skipToNext() }, modifier = Modifier.size(56.dp)) {
-                            Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = Color.White, modifier = Modifier.size(42.dp))
-                        }
-                        IconButton(onClick = { viewModel.toggleRepeat() }) {
-                            Icon(
-                                if (repeatMode == Player.REPEAT_MODE_ONE) Icons.Default.RepeatOne else Icons.Default.Repeat, 
-                                contentDescription = "Repeat", 
-                                tint = if (repeatMode != Player.REPEAT_MODE_OFF) TidalAccent else Color.White.copy(alpha = 0.5f), 
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                    }
+                    PlaybackControls(
+                        isPlaying = isPlaying,
+                        shuffleMode = shuffleMode,
+                        repeatMode = repeatMode,
+                        onToggleShuffle = { viewModel.toggleShuffle() },
+                        onSkipPrevious = { viewModel.skipToPrevious() },
+                        onTogglePlayPause = { viewModel.togglePlayPause() },
+                        onSkipNext = { viewModel.skipToNext() },
+                        onToggleRepeat = { viewModel.toggleRepeat() }
+                    )
                     
                     Spacer(modifier = Modifier.height(120.dp))
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun PlayerHeader(onBack: () -> Unit, onShowQueue: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 16.dp, bottom = 12.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = onBack) {
+            Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Minimize", tint = Color.White, modifier = Modifier.size(36.dp))
+        }
+        Text(
+            "NOW PLAYING",
+            style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 2.sp),
+            color = Color.White.copy(alpha = 0.7f)
+        )
+        IconButton(onClick = onShowQueue) {
+            Icon(Icons.Default.PlaylistPlay, contentDescription = "Queue", tint = Color.White, modifier = Modifier.size(28.dp))
+        }
+    }
+}
+
+@Composable
+fun AlbumArt(
+    song: Song,
+    isPlaying: Boolean,
+    onSkipNext: () -> Unit,
+    onSkipPrevious: () -> Unit
+) {
+    val scope = rememberCoroutineScope()
+    val offsetX = remember { Animatable(0f) }
+    val albumArtScale by animateFloatAsState(
+        targetValue = if (isPlaying) 1f else 0.85f,
+        animationSpec = tween(durationMillis = 500),
+        label = "AlbumArtScale"
+    )
+
+    Card(
+        shape = RoundedCornerShape(24.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 20.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .aspectRatio(1f)
+            .graphicsLayer(
+                scaleX = albumArtScale,
+                scaleY = albumArtScale,
+                translationX = offsetX.value
+            )
+            .padding(horizontal = 8.dp)
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures(
+                    onHorizontalDrag = { change, dragAmount ->
+                        change.consume()
+                        scope.launch {
+                            offsetX.snapTo(offsetX.value + dragAmount)
+                        }
+                    },
+                    onDragEnd = {
+                        if (offsetX.value > 200f) {
+                            onSkipPrevious()
+                        } else if (offsetX.value < -200f) {
+                            onSkipNext()
+                        }
+                        scope.launch {
+                            offsetX.animateTo(0f, tween(300))
+                        }
+                    },
+                    onDragCancel = {
+                        scope.launch {
+                            offsetX.animateTo(0f, tween(300))
+                        }
+                    }
+                )
+            }
+    ) {
+        AsyncImage(
+            model = song.thumbnail,
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop
+        )
+    }
+}
+
+@Composable
+fun SongInfo(song: Song) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                song.title,
+                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Black),
+                color = Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                song.artist,
+                style = MaterialTheme.typography.titleLarge,
+                color = Color.White.copy(alpha = 0.7f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        IconButton(onClick = { /* Like */ }) {
+            Icon(Icons.Default.FavoriteBorder, contentDescription = "Like", tint = Color.White, modifier = Modifier.size(28.dp))
+        }
+    }
+}
+
+@Composable
+fun PlaybackProgress(
+    positionFlow: kotlinx.coroutines.flow.StateFlow<Long>,
+    durationFlow: kotlinx.coroutines.flow.StateFlow<Long>,
+    onSeek: (Long) -> Unit
+) {
+    val position by positionFlow.collectAsState()
+    val duration by durationFlow.collectAsState()
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Slider(
+            value = if (duration > 0) position.toFloat() / duration.toFloat() else 0f,
+            onValueChange = { onSeek((it * duration).toLong()) },
+            colors = SliderDefaults.colors(
+                thumbColor = Color.White,
+                activeTrackColor = Color.White,
+                inactiveTrackColor = Color.White.copy(alpha = 0.2f)
+            )
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                formatDuration(position),
+                style = MaterialTheme.typography.labelMedium,
+                color = Color.White.copy(alpha = 0.5f)
+            )
+            Text(
+                formatDuration(duration),
+                style = MaterialTheme.typography.labelMedium,
+                color = Color.White.copy(alpha = 0.5f)
+            )
+        }
+    }
+}
+
+@Composable
+fun PlaybackControls(
+    isPlaying: Boolean,
+    shuffleMode: ShuffleMode,
+    repeatMode: Int,
+    onToggleShuffle: () -> Unit,
+    onSkipPrevious: () -> Unit,
+    onTogglePlayPause: () -> Unit,
+    onSkipNext: () -> Unit,
+    onToggleRepeat: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = onToggleShuffle) {
+            Icon(
+                if (shuffleMode == ShuffleMode.SMART) Icons.Default.AutoAwesome else Icons.Default.Shuffle,
+                contentDescription = "Shuffle",
+                tint = if (shuffleMode != ShuffleMode.OFF) TidalAccent else Color.White.copy(alpha = 0.5f),
+                modifier = Modifier.size(24.dp)
+            )
+        }
+        IconButton(onClick = onSkipPrevious, modifier = Modifier.size(56.dp)) {
+            Icon(Icons.Default.SkipPrevious, contentDescription = "Previous", tint = Color.White, modifier = Modifier.size(42.dp))
+        }
+        Box(
+            modifier = Modifier
+                .size(80.dp)
+                .clip(CircleShape)
+                .background(Color.White)
+                .clickable { onTogglePlayPause() },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                contentDescription = "Play/Pause",
+                tint = Color.Black,
+                modifier = Modifier.size(48.dp)
+            )
+        }
+        IconButton(onClick = onSkipNext, modifier = Modifier.size(56.dp)) {
+            Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = Color.White, modifier = Modifier.size(42.dp))
+        }
+        IconButton(onClick = onToggleRepeat) {
+            Icon(
+                if (repeatMode == Player.REPEAT_MODE_ONE) Icons.Default.RepeatOne else Icons.Default.Repeat,
+                contentDescription = "Repeat",
+                tint = if (repeatMode != Player.REPEAT_MODE_OFF) TidalAccent else Color.White.copy(alpha = 0.5f),
+                modifier = Modifier.size(24.dp)
+            )
         }
     }
 }
