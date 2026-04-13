@@ -270,10 +270,20 @@ class PlayerViewModel(
                 _isLiked.value = rating == "like"
             }
 
-            // Recommendations
+            // Recommendations (waiting for like or 50% progress)
             launch {
-                val currentInfo = info ?: extractor.getFullStreamInfo(song.id)
-                processRecommendations(song, currentInfo)
+                if (_shuffleMode.value == ShuffleMode.SMART) {
+                    while (!_isLiked.value && 
+                           (_duration.value == 0L || _playbackPosition.value < _duration.value / 2)) {
+                        delay(2000)
+                        if (_currentSong.value?.id != song.id || _shuffleMode.value != ShuffleMode.SMART) break
+                    }
+
+                    if (_currentSong.value?.id == song.id && _shuffleMode.value == ShuffleMode.SMART) {
+                        val currentInfo = info ?: extractor.getFullStreamInfo(song.id)
+                        processRecommendations(song, currentInfo)
+                    }
+                }
             }
             
             // Prefetch next song and update player playlist
@@ -426,10 +436,9 @@ class PlayerViewModel(
                 val remainingCount = currentQueue.size - remainingIdx
 
                 if (remainingCount > 0) {
-                    // Insert at regular intervals within the remaining queue
-                    val interval = (remainingCount / newRelated.size).coerceAtLeast(1)
-                    newRelated.forEachIndexed { i, relSong ->
-                        val insertPos = (remainingIdx + (i + 1) * interval + i).coerceAtMost(currentQueue.size)
+                    // Insert at diverse, potentially randomized positions within the remaining queue
+                    newRelated.forEach { relSong ->
+                        val insertPos = (remainingIdx..currentQueue.size).random()
                         currentQueue.add(insertPos, relSong)
                     }
                 } else {
@@ -614,10 +623,17 @@ class PlayerViewModel(
             // Restore original order
             _queue.value = _originalQueue.value
         } else if (newMode == ShuffleMode.SMART) {
-            _currentSong.value?.let { current ->
+            _currentSong.value?.let { song ->
                 viewModelScope.launch {
-                    val info = extractor.getFullStreamInfo(current.id)
-                    processRecommendations(current, info)
+                    // Wait until song is liked OR reaches 50% playback progress
+                    while (!_isLiked.value && 
+                           (_duration.value == 0L || _playbackPosition.value < _duration.value / 2)) {
+                        delay(2000)
+                        if (_currentSong.value?.id != song.id || _shuffleMode.value != ShuffleMode.SMART) return@launch
+                    }
+
+                    val info = extractor.getFullStreamInfo(song.id)
+                    processRecommendations(song, info)
                 }
             }
         }
