@@ -1,6 +1,6 @@
 # DergPlayerAndroid
 
-A full-screen retro Terminal User Interface (TUI) media player for Android.
+A full-screen retro Terminal User Interface (TUI) media player for Android. *This is a personal project and will only allow sign-ins for my own Google account.*
 
 ## Features
 
